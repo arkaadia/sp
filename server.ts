@@ -4,17 +4,28 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
+import multer from 'multer';
+import { AssetLibrary } from './src/utils/AssetLibrary.ts';
+
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 } // 4MB limit to match DALL-E 2 variation limits
+});
+
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 app.use(express.json({ limit: '15mb' }));
+app.use('/api/assets/images', express.static(path.join(__dirname, 'data/assets')));
+
 
 // Gracefully handle optional Gemini API key
 let ai: GoogleGenAI | null = null;
@@ -30,6 +41,26 @@ if (geminiApiKey && geminiApiKey !== 'MY_GEMINI_API_KEY' && geminiApiKey.trim().
   });
 }
 
+let openai: OpenAI | null = null;
+const openaiApiKey = process.env.OPENAI_API_KEY;
+if (openaiApiKey && openaiApiKey !== 'MY_OPENAI_API_KEY' && openaiApiKey.trim().length > 0) {
+  openai = new OpenAI({
+    apiKey: openaiApiKey,
+  });
+}
+
+
+// Retrieve all generated assets from the local library
+app.get('/api/assets', async (_req, res) => {
+  try {
+    const assets = await AssetLibrary.getAssets();
+    res.json(assets);
+  } catch (err: any) {
+    console.error('Failed to get assets:', err);
+    res.status(500).json({ error: 'Failed to retrieve assets' });
+  }
+});
+
 // Health check endpoint for system monitoring, status scripts, and systemd
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -42,6 +73,93 @@ app.get('/api/health', (_req, res) => {
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
+});
+
+// Endpoint for generating character via OpenAI
+app.post('/api/openai/generate-character', upload.single('image'), async (req, res) => {
+  if (!openai) {
+    return res.status(503).json({
+      error: 'OPENAI_API_KEY is not configured on this server. Please provide it in .env to use the Character Generator.',
+    });
+  }
+
+  try {
+    const { prompt } = req.body;
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'Valid prompt string is required' });
+    }
+
+    let imageUrl = '';
+
+    if (req.file) {
+      // If reference image is provided, use dall-e-2 createVariation or edit
+      // Note: OpenAI image variation requires a square PNG file less than 4MB
+      // Converting any image to square PNG in memory is complex, so we will pass it
+      // directly but catch errors if it fails validation on OpenAI side.
+      // Need to convert buffer properly
+      const buffer = req.file.buffer as any;
+      const imageFile = new File([buffer], req.file.originalname, { type: req.file.mimetype });
+
+      const response = await openai.images.createVariation({
+        image: imageFile,
+        n: 1,
+        size: '1024x1024',
+      });
+      imageUrl = (response.data && response.data[0]?.url) || '';
+    } else {
+      // Standard text to image using DALL-E 3
+      const response = await openai.images.generate({
+        model: 'dall-e-3',
+        prompt: prompt,
+        n: 1,
+        size: '1024x1024',
+        quality: 'standard',
+        response_format: 'url',
+      });
+      imageUrl = (response.data && response.data[0]?.url) || '';
+    }
+
+    if (!imageUrl) {
+      throw new Error('No usable image was returned by the API');
+    }
+
+    // Fetch the image from the URL and save it to the Asset Library
+    const imageRes = await fetch(imageUrl);
+    if (!imageRes.ok) {
+      throw new Error(`Failed to download generated image: ${imageRes.statusText}`);
+    }
+    const arrayBuffer = await imageRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const assetMetadata = await AssetLibrary.saveAsset(
+      {
+        name: req.body.name || 'Generated Character',
+        prompt,
+        provider: 'OpenAI',
+        model: req.file ? 'dall-e-2' : 'dall-e-3',
+        generationSettings: {
+          style: req.body.style,
+          type: req.body.type
+        },
+        imageDimensions: { width: 1024, height: 1024 },
+        originalId: req.body.originalId
+      },
+      buffer
+    );
+
+    res.json({ imageUrl: assetMetadata.assetLocation, asset: assetMetadata });
+
+  } catch (err: any) {
+    console.error('OpenAI error:', err);
+    // Provide meaningful error messages based on OpenAI error types if possible
+    let errorMsg = err.message || 'Failed to generate character';
+    if (err.status === 401) errorMsg = 'Authentication failed. Please check your API key.';
+    else if (err.status === 429) errorMsg = 'Rate limit exceeded or insufficient quota.';
+    else if (err.status >= 500) errorMsg = 'OpenAI API server error. Please try again later.';
+
+    res.status(err.status || 500).json({ error: errorMsg });
+  }
 });
 
 // API endpoint for AI prompt assistant or generating additional sprite actions

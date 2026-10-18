@@ -14,9 +14,12 @@ import { ActionArena } from './components/ActionArena';
 import { SpriteSlicer } from './components/SpriteSlicer';
 import { GithubGuideView } from './components/GithubGuideView';
 import { ExportModal } from './components/ExportModal';
+import { CharacterGenerator } from './components/CharacterGenerator';
+import { AssetLibraryView } from './components/AssetLibraryView';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'github'>('studio');
+  const [selectedAssetForVariation, setSelectedAssetForVariation] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'library' | 'github'>('studio');
   const [packList, setPackList] = useState<CharacterPack[]>(CHARACTER_PACKS);
   const [currentPackIndex, setCurrentPackIndex] = useState<number>(0);
   const [selectedAction, setSelectedAction] = useState<SpriteAction>('idle');
@@ -142,6 +145,19 @@ export default function App() {
             bgSmoothness={bgSmoothness}
           />
         )}
+
+
+        {activeTab === 'generator' && (
+          <CharacterGenerator initialAsset={selectedAssetForVariation} />
+        )}
+
+        {activeTab === 'library' && (
+          <AssetLibraryView onGenerateVariation={(asset) => {
+            setSelectedAssetForVariation(asset);
+            setActiveTab('generator');
+          }} />
+        )}
+
 
         {activeTab === 'github' && <GithubGuideView />}
       </main>

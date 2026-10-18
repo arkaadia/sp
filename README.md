@@ -65,6 +65,7 @@ Copy the example environment configuration:
 cp .env.example .env
 ```
 *(Optional: Provide `GEMINI_API_KEY` in `.env` if using AI animation breakdown extensions).*
+*(Optional: Provide `OPENAI_API_KEY` in `.env` if using the AI Character Generator).*
 
 ### 5. Launch the Development Server
 ```bash
