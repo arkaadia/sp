@@ -151,15 +151,28 @@ curl -4 -I --connect-timeout 5 https://registry.npmjs.org
 ```
 
 ### Solutions:
-1. **Corporate Proxy / VPN**: Preserve proxy environment variables when running with sudo:
+1. **Invalid / Empty Proxy Syntax (`curl: (5) Unsupported proxy syntax in '""'`)**:
+   If an environment variable like `http_proxy='""'` or `https_proxy="\"\""` is set, curl fails to parse the literal quotes. The installer now automatically sanitizes and unsets empty or quoted proxy variables. You can also inspect your proxy environment with:
+   ```bash
+   env | grep -i proxy
+   ```
+2. **Peer Dependency Conflicts (`npm error code ERESOLVE`)**:
+   The project dependencies have been aligned to `esbuild@^0.28.0` matching `vite@^8.3.0` and `tsx`. Both `bun.lock` and `package-lock.json` are committed. If running manual installation under Node.js:
+   ```bash
+   cd /opt/elysian-sprite-studio
+   npm ci
+   ```
+3. **Corporate Proxy / VPN**: Preserve proxy environment variables when running with sudo:
    ```bash
    export http_proxy=http://proxy.yourcompany.com:8080
    export https_proxy=http://proxy.yourcompany.com:8080
    sudo -E bash install.sh
    ```
-2. **Broken IPv6 Routing (Common on Ubuntu 24.04 Cloud VPS)**:
+4. **Broken IPv6 Routing (Common on Ubuntu 24.04 Cloud VPS)**:
    The installer automatically falls back to IPv4 (`curl -4`) if dual-stack IPv6 stalls.
-3. **Bypassing the Connectivity Check**:
+5. **Safe Recovery & Rerunning**:
+   Re-running `sudo bash install.sh` automatically detects previous or partial attempts, refreshes code, and restores your `.env` and `data/` assets with zero data loss.
+6. **Bypassing the Connectivity Check**:
    If you have pre-cached dependencies or already verified network access:
    ```bash
    sudo bash install.sh --skip-connectivity-check

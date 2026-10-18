@@ -88,6 +88,69 @@ DEFAULT_PORT=3000
 DEFAULT_HOST="127.0.0.1"
 
 # ------------------------------------------------------------------------------
+# 1.1. Proxy Environment Sanitization & Diagnostics
+# ------------------------------------------------------------------------------
+# Automatically detects empty, whitespace-only, and incorrectly quoted proxy values
+# (e.g. '""' or "''") that cause curl error:
+# "curl: (5) Unsupported proxy syntax in '\"\"': Bad hostname"
+sanitize_proxy_env() {
+    local proxy_vars=(
+        "http_proxy" "HTTP_PROXY"
+        "https_proxy" "HTTPS_PROXY"
+        "all_proxy" "ALL_PROXY"
+        "ftp_proxy" "FTP_PROXY"
+        "no_proxy" "NO_PROXY"
+    )
+
+    local active_proxies=()
+
+    for var in "${proxy_vars[@]}"; do
+        if [ -n "${!var+x}" ]; then
+            local raw="${!var}"
+            # Strip leading and trailing whitespace
+            local clean="$raw"
+            clean="${clean#"${clean%%[![:space:]]*}"}"
+            clean="${clean%"${clean##*[![:space:]]}"}"
+
+            # Strip outer double quotes if present (e.g. '""' or '"http://..."')
+            if [[ "$clean" =~ ^\"(.*)\"$ ]]; then
+                clean="${BASH_REMATCH[1]}"
+            fi
+            # Strip outer single quotes if present (e.g. "''" or "'http://...'")
+            if [[ "$clean" =~ ^\'(.*)\'$ ]]; then
+                clean="${BASH_REMATCH[1]}"
+            fi
+            # Strip whitespace again after quotes are removed
+            clean="${clean#"${clean%%[![:space:]]*}"}"
+            clean="${clean%"${clean##*[![:space:]]}"}"
+
+            if [ -z "$clean" ]; then
+                # Empty or quoted empty value — unset to prevent curl error 5
+                unset "$var"
+            elif [[ "$var" =~ ^(no_proxy|NO_PROXY)$ ]]; then
+                export "$var=$clean"
+            elif [[ "$clean" =~ ^(https?|socks5h?|socks4a?):// ]]; then
+                # Valid proxy URL syntax
+                export "$var=$clean"
+                # Mask credentials if present for safe diagnostic logging
+                local masked
+                masked=$(echo "$clean" | sed -E 's|(://[^:@]+:)[^@]+@|\1***@|')
+                active_proxies+=("${var}=${masked}")
+            else
+                log_warn "Malformed proxy syntax in ${var}: '${raw}'. Unsetting to allow direct connection."
+                unset "$var"
+            fi
+        fi
+    done
+
+    if [ "${#active_proxies[@]}" -gt 0 ]; then
+        log_info "Active proxy configuration detected: ${active_proxies[*]}"
+    fi
+}
+
+sanitize_proxy_env
+
+# ------------------------------------------------------------------------------
 # 2. Linux Distribution Check
 # ------------------------------------------------------------------------------
 log_info "Detecting Linux distribution and package manager..."
@@ -329,22 +392,37 @@ if [[ -z "${RUNTIME_BIN}" ]]; then
     log_info "Installing Bun runtime for reproducible lockfile deployment..."
     BUN_INSTALL_DIR="/tmp/bun-install-$$"
     mkdir -p "${BUN_INSTALL_DIR}"
+    BUN_INSTALL_LOG="/tmp/bun-install-$$.log"
     
+    # Ensure proxy environment is clean before invoking curl
+    sanitize_proxy_env
+
     # Official Bun installer
-    if curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1; then
-        # Bun installer installs to /root/.bun/bin/bun
+    if curl -fsSL https://bun.sh/install 2>"${BUN_INSTALL_LOG}" | bash >/dev/null 2>&1; then
+        # Bun installer installs to /root/.bun/bin/bun or ${HOME}/.bun/bin/bun
         if [[ -x "${HOME}/.bun/bin/bun" ]]; then
             cp "${HOME}/.bun/bin/bun" /usr/local/bin/bun
             chmod 755 /usr/local/bin/bun
             RUNTIME_BIN="/usr/local/bin/bun"
             log_success "Bun runtime installed successfully to /usr/local/bin/bun ($(${RUNTIME_BIN} --version))."
+        elif [[ -x "/root/.bun/bin/bun" ]]; then
+            cp "/root/.bun/bin/bun" /usr/local/bin/bun
+            chmod 755 /usr/local/bin/bun
+            RUNTIME_BIN="/usr/local/bin/bun"
+            log_success "Bun runtime installed successfully to /usr/local/bin/bun ($(${RUNTIME_BIN} --version))."
+        fi
+    else
+        log_warn "Bun automated installation did not succeed. Checking Node.js runtime fallback..."
+        if [[ -s "${BUN_INSTALL_LOG}" ]]; then
+            log_info "Bun installer diagnostic: $(tr '\n' ' ' < "${BUN_INSTALL_LOG}" | cut -c1-120)"
         fi
     fi
+    rm -f "${BUN_INSTALL_LOG}" 2>/dev/null || true
 fi
 
 # Fallback to Node.js if Bun could not be provisioned
 if [[ -z "${RUNTIME_BIN}" ]]; then
-    log_warn "Bun automated installation did not succeed. Checking Node.js runtime..."
+    log_info "Proceeding with Node.js runtime fallback..."
     if command -v node >/dev/null 2>&1; then
         NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
         if [[ "${NODE_VER}" -ge 18 ]]; then
@@ -378,9 +456,11 @@ fi
 log_info "Setting up application directory at ${INSTALL_DIR}..."
 
 PREVIOUS_INSTALL=false
-if [[ -d "${INSTALL_DIR}" ]]; then
+if [[ -f "${INSTALL_DIR}/.install_complete" ]]; then
     PREVIOUS_INSTALL=true
-    log_info "Existing installation detected at ${INSTALL_DIR}. Preserving configuration and persistent data..."
+    log_info "Existing verified installation detected at ${INSTALL_DIR}. Preserving configuration and persistent data..."
+elif [[ -d "${INSTALL_DIR}" ]]; then
+    log_warn "Partial or incomplete installation detected at ${INSTALL_DIR}. Safely recovering..."
 fi
 
 mkdir -p "${INSTALL_DIR}"
@@ -396,13 +476,14 @@ fi
 
 # Copy application files from source directory
 log_info "Copying application files to ${INSTALL_DIR}..."
-# Use tar or rsync to copy while excluding git and node_modules
+# Use tar to copy while excluding git, node_modules, .env, dist, and existing persistent data
 (
     cd "${SOURCE_DIR}"
     tar --exclude='.git' \
         --exclude='node_modules' \
         --exclude='.env' \
         --exclude='dist' \
+        --exclude='data' \
         -cf - . | (cd "${INSTALL_DIR}" && tar -xf -)
 )
 
@@ -475,43 +556,72 @@ fi
 # ------------------------------------------------------------------------------
 # 8. Dependency Installation & Production Build
 # ------------------------------------------------------------------------------
-log_info "Installing dependencies from lockfile..."
+log_info "Installing dependencies from committed lockfile..."
 cd "${INSTALL_DIR}"
 
+DEP_INSTALL_SUCCESS=false
+
 if [[ "${RUNTIME_BIN}" =~ bun$ ]]; then
-    bun install --frozen-lockfile || {
-        log_warn "Frozen lockfile install failed. Attempting standard bun install..."
-        bun install || {
-            log_error "Bun dependencies installation failed."
-            exit 1
-        }
-    }
+    log_info "Executing 'bun install --frozen-lockfile'..."
+    if bun install --frozen-lockfile; then
+        DEP_INSTALL_SUCCESS=true
+    else
+        log_warn "Frozen lockfile install failed. Attempting standard 'bun install'..."
+        if bun install; then
+            DEP_INSTALL_SUCCESS=true
+        fi
+    fi
 else
-    npm ci 2>/dev/null || npm install || {
-        log_error "npm dependencies installation failed."
-        exit 1
-    }
+    # Node.js / npm execution path
+    if [[ -f "${INSTALL_DIR}/package-lock.json" ]]; then
+        log_info "Executing 'npm ci' from package-lock.json..."
+        if npm ci; then
+            DEP_INSTALL_SUCCESS=true
+        else
+            log_warn "'npm ci' failed. Attempting fallback 'npm install'..."
+            if npm install; then
+                DEP_INSTALL_SUCCESS=true
+            fi
+        fi
+    else
+        log_info "Executing 'npm install'..."
+        if npm install; then
+            DEP_INSTALL_SUCCESS=true
+        fi
+    fi
 fi
-log_success "Project dependencies installed."
+
+if [[ "${DEP_INSTALL_SUCCESS}" != "true" ]]; then
+    log_error "Dependency installation failed. Review the output above for the exact error."
+    echo ""
+    echo -e "${YELLOW}Recovery Steps:${RESET}"
+    echo "  1. Check Node and npm versions: node -v && npm -v"
+    echo "  2. If behind a proxy, verify npm proxy configuration: npm config get proxy"
+    echo "  3. To retry manually: cd ${INSTALL_DIR} && npm ci (or bun install)"
+    echo "  4. Your configuration (.env) and data have been safely preserved in ${INSTALL_DIR}."
+    echo ""
+    exit 1
+fi
+log_success "Project dependencies installed successfully."
 
 log_info "Building frontend for production deployment..."
+BUILD_SUCCESS=false
 if [[ "${RUNTIME_BIN}" =~ bun$ ]]; then
-    bun run build || {
-        log_error "Production build with Bun failed."
-        exit 1
-    }
+    if bun run build; then
+        BUILD_SUCCESS=true
+    fi
 else
-    npm run build || {
-        log_error "Production build with npm failed."
-        exit 1
-    }
+    if npm run build; then
+        BUILD_SUCCESS=true
+    fi
 fi
 
-if [[ ! -f "${INSTALL_DIR}/dist/index.html" ]]; then
-    log_error "Build output missing (${INSTALL_DIR}/dist/index.html not found)."
+if [[ "${BUILD_SUCCESS}" != "true" || ! -f "${INSTALL_DIR}/dist/index.html" ]]; then
+    log_error "Production build failed (${INSTALL_DIR}/dist/index.html was not generated)."
     exit 1
 fi
 log_success "Production build completed successfully."
+touch "${INSTALL_DIR}/.install_complete"
 
 # ------------------------------------------------------------------------------
 # 9. Dedicated System User Creation
@@ -540,6 +650,8 @@ log_info "Configuring systemd service '${SERVICE_NAME}'..."
 EXEC_START=""
 if [[ "${RUNTIME_BIN}" =~ bun$ ]]; then
     EXEC_START="${RUNTIME_BIN} server.ts"
+elif [[ -x "${INSTALL_DIR}/node_modules/.bin/tsx" ]]; then
+    EXEC_START="${INSTALL_DIR}/node_modules/.bin/tsx server.ts"
 else
     EXEC_START="$(command -v node) server.ts"
 fi

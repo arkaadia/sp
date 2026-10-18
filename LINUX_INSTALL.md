@@ -38,18 +38,18 @@ Upon launching, the installer displays the **DELAVAR STUDIO** terminal banner (i
 
 ### What `install.sh` Does Automatically:
 1. **OS Detection**: Validates Linux distribution via `/etc/os-release`.
-2. **Pre-flight Checks**: Verifies internet connectivity and free disk space.
-3. **OS Packages**: Installs `curl`, `ca-certificates`, `git`, `build-essential`, `tar`, and `lsof` via `apt-get`.
-4. **Runtime Provisioning**:
-   - Detects the repository lockfile (`bun.lock`).
-   - Automatically installs or uses the high-performance **Bun runtime** to ensure 100% reproducible dependency installation.
-   - Automatically provisions Node.js 20 LTS as a fallback if needed.
-5. **Reproducible Install**: Runs `bun install --frozen-lockfile` (no lockfile tampering or package version mismatch).
-6. **Production Build**: Compiles Vite assets into `/opt/elysian-sprite-studio/dist`.
-7. **Port Conflict Safeguard**: Checks if port 3000 is occupied; if an external process holds it, auto-assigns the next available port without terminating unrelated applications.
-8. **Least-Privilege Security User**: Creates a dedicated `spritestudio` system account without login privileges.
-9. **Systemd Daemon**: Configures, enables, and starts `sprite-studio.service` with automatic restarts and crash recovery.
-10. **Global Command**: Installs `/usr/local/bin/sprite-studio` for terminal control.
+2. **Proxy Sanitization**: Detects empty quotes (`""`), whitespace, or malformed proxy variables to prevent curl syntax errors while preserving and masking valid proxy configurations.
+3. **Pre-flight Checks**: Verifies internet connectivity to required registries and validates at least 500 MB free disk space.
+4. **OS Packages**: Installs `curl`, `ca-certificates`, `git`, `build-essential`, `tar`, and `lsof` via `apt-get`.
+5. **Runtime Provisioning**:
+   - Automatically uses or installs the high-performance **Bun runtime** using `bun.lock`.
+   - Seamlessly falls back to **Node.js 20 LTS / 22** using `package-lock.json` if Bun is not available.
+6. **Reproducible Install**: Runs `bun install --frozen-lockfile` (or `npm ci` under Node.js) with aligned `esbuild@^0.28.0` and `vite@^8.3.0` to eliminate dependency conflicts.
+7. **Production Build**: Compiles Vite assets into `/opt/elysian-sprite-studio/dist` and verifies `index.html`.
+8. **Port Conflict Safeguard**: Checks if port 3000 is occupied; if an external process holds it, auto-assigns the next available port without terminating unrelated applications.
+9. **Least-Privilege Security User**: Creates a dedicated `spritestudio` system account without login privileges.
+10. **Systemd Daemon**: Configures, enables, and starts `sprite-studio.service` with automatic restarts and crash recovery.
+11. **Global Command**: Installs `/usr/local/bin/sprite-studio` for terminal control.
 
 ---
 

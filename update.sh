@@ -66,6 +66,32 @@ elif command -v node >/dev/null 2>&1; then
     RUNTIME_BIN="$(command -v node)"
 fi
 
+# Proxy sanitization
+sanitize_proxy_env() {
+    local proxy_vars=("http_proxy" "HTTP_PROXY" "https_proxy" "HTTPS_PROXY" "all_proxy" "ALL_PROXY" "ftp_proxy" "FTP_PROXY" "no_proxy" "NO_PROXY")
+    for var in "${proxy_vars[@]}"; do
+        if [ -n "${!var+x}" ]; then
+            local clean="${!var}"
+            clean="${clean#"${clean%%[![:space:]]*}"}"
+            clean="${clean%"${clean##*[![:space:]]}"}"
+            if [[ "$clean" =~ ^\"(.*)\"$ ]]; then clean="${BASH_REMATCH[1]}"; fi
+            if [[ "$clean" =~ ^\'(.*)\'$ ]]; then clean="${BASH_REMATCH[1]}"; fi
+            clean="${clean#"${clean%%[![:space:]]*}"}"
+            clean="${clean%"${clean##*[![:space:]]}"}"
+            if [ -z "$clean" ]; then
+                unset "$var"
+            elif [[ "$var" =~ ^(no_proxy|NO_PROXY)$ ]]; then
+                export "$var=$clean"
+            elif [[ "$clean" =~ ^(https?|socks5h?|socks4a?):// ]]; then
+                export "$var=$clean"
+            else
+                unset "$var"
+            fi
+        fi
+    done
+}
+sanitize_proxy_env
+
 # 4. Install dependencies
 log_info "Updating project dependencies..."
 if [[ "${RUNTIME_BIN}" =~ bun$ ]]; then
@@ -73,7 +99,11 @@ if [[ "${RUNTIME_BIN}" =~ bun$ ]]; then
     log_info "Building production bundle with Bun..."
     "${RUNTIME_BIN}" run build
 else
-    npm install
+    if [[ -f "${INSTALL_DIR}/package-lock.json" ]]; then
+        npm ci || npm install
+    else
+        npm install
+    fi
     log_info "Building production bundle with npm..."
     npm run build
 fi
