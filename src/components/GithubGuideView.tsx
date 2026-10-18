@@ -37,27 +37,32 @@ export const GithubGuideView: React.FC = () => {
 
   const installSteps = [
     {
-      title: '1. Clone the GitHub Repository',
+      title: '⚡ 1-Command Automated Linux Installer (Ubuntu / Debian)',
+      desc: 'Deploy the complete production service with systemd daemon, auto-restart, and global CLI:',
+      code: 'git clone https://github.com/arkaadia/sp.git\ncd sp\nsudo bash install.sh',
+    },
+    {
+      title: '🛠️ Production CLI Service Control',
+      desc: 'Manage the background service anytime using the global sprite-studio command:',
+      code: 'sprite-studio status    # Check service and port\nsprite-studio logs -f   # Stream real-time logs\nsprite-studio restart   # Restart production service\nsprite-studio update    # Pull git updates & rebuild',
+    },
+    {
+      title: '1. Manual Git Clone (Development)',
       desc: 'Clone the repository to your local computer using Git:',
-      code: 'git clone https://github.com/your-username/elysian-sprite-studio.git\ncd elysian-sprite-studio',
+      code: 'git clone https://github.com/arkaadia/sp.git\ncd sp',
     },
     {
-      title: '2. Install Node.js Dependencies',
-      desc: 'Install all required React 19, Vite 8, and Express packages:',
-      code: 'npm install',
+      title: '2. Install Dependencies from Lockfile',
+      desc: 'Reproducibly install packages using Bun or npm:',
+      code: 'bun install --frozen-lockfile\n# or\nnpm install',
     },
     {
-      title: '3. Configure Environment Variables',
-      desc: 'Set up your environment template:',
-      code: 'cp .env.example .env',
-    },
-    {
-      title: '4. Start the 60 FPS Development Server',
+      title: '3. Start Local Development Server',
       desc: 'Run the Vite dev server with TypeScript hot-reloading:',
       code: 'npm run dev',
     },
     {
-      title: '5. Production Build & Optimization',
+      title: '4. Production Build & Optimization',
       desc: 'Compile production-grade static assets and bundle for web hosting:',
       code: 'npm run build\nnpm start',
     },

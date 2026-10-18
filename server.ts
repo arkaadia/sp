@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 
@@ -10,21 +11,47 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0');
 
 app.use(express.json({ limit: '15mb' }));
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Gracefully handle optional Gemini API key
+let ai: GoogleGenAI | null = null;
+const geminiApiKey = process.env.GEMINI_API_KEY;
+if (geminiApiKey && geminiApiKey !== 'MY_GEMINI_API_KEY' && geminiApiKey.trim().length > 0) {
+  ai = new GoogleGenAI({
+    apiKey: geminiApiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
     },
-  },
+  });
+}
+
+// Health check endpoint for system monitoring, status scripts, and systemd
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    app: 'Elysian Sprite Studio',
+    mode: process.env.NODE_ENV || 'development',
+    host: HOST,
+    port: PORT,
+    aiAvailable: ai !== null,
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // API endpoint for AI prompt assistant or generating additional sprite actions
 app.post('/api/gemini/describe-action', async (req, res) => {
+  if (!ai) {
+    return res.status(503).json({
+      error: 'GEMINI_API_KEY is not configured on this server. AI action breakdown is optional and requires an API key in .env.',
+    });
+  }
+
   try {
     const { actionName, characterStyle } = req.body;
     if (!actionName) {
@@ -65,15 +92,31 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, 'dist')));
+    const distPath = fs.existsSync(path.join(__dirname, 'dist'))
+      ? path.join(__dirname, 'dist')
+      : path.resolve(__dirname);
+
+    app.use(express.static(distPath));
     app.get('*', (_req, res) => {
-      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`Elysian Sprite Studio running at http://${HOST}:${PORT}`);
   });
+
+  // Graceful shutdown
+  const shutdown = () => {
+    console.log('Received shutdown signal. Stopping server gracefully...');
+    server.close(() => {
+      console.log('Server stopped.');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 startServer();

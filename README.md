@@ -11,11 +11,34 @@ A modern, high-performance web studio designed for indie game developers, pixel 
 
 ---
 
-## 🚀 Quick Start & Installation
+## 🐧 Linux 1-Command Automated Production Installation
 
-Follow these steps to run the engine locally on your machine or deploy it to your server:
+On Ubuntu (20.04+) or Debian (11+), deploy the production service with automated runtime provisioning, systemd daemon, and global CLI:
 
-### 1. Prerequisites
+```bash
+git clone https://github.com/arkaadia/sp.git
+cd sp
+sudo bash install.sh
+```
+
+After installation finishes, access the application in your browser at **`http://127.0.0.1:3000`**.
+
+### Service Management CLI
+```bash
+sprite-studio status    # Check service and health endpoint
+sprite-studio restart   # Restart production service
+sprite-studio logs      # View recent application logs
+sprite-studio update    # Pull git updates, rebuild, and reload
+sprite-studio stop      # Stop service
+```
+
+- 📖 **Full Linux Guide**: [LINUX_INSTALL.md](LINUX_INSTALL.md) (Nginx reverse proxy, LAN binding, firewall, uninstaller)
+- 🔧 **Troubleshooting**: [TROUBLESHOOTING.md](TROUBLESHOOTING.md) (Port conflicts, logs, memory limits)
+- 📐 **Animation Conventions**: [SPRITE_RULES.md](SPRITE_RULES.md) (Standard 8-frame rules, pivot lines, engine specs)
+
+---
+
+## 🚀 Local Development Quick Start
 - **Node.js** (v18.0.0 or higher recommended, Node 20 LTS preferred)
 - **npm** (v9.0.0+) or **pnpm** / **yarn**
 
