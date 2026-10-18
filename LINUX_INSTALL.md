@@ -32,6 +32,10 @@ sudo bash install.sh
 
 Upon launching, the installer displays the **DELAVAR STUDIO** terminal banner (in bold bright blue) and automatically proceeds with pre-flight checks.
 
+> **Network & Proxy Options**:
+> - If behind a proxy, preserve environment variables with `sudo -E bash install.sh`.
+> - If running in an air-gapped or pre-configured offline environment: `sudo bash install.sh --skip-connectivity-check`.
+
 ### What `install.sh` Does Automatically:
 1. **OS Detection**: Validates Linux distribution via `/etc/os-release`.
 2. **Pre-flight Checks**: Verifies internet connectivity and free disk space.

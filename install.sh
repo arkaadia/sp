@@ -53,6 +53,23 @@ elif [[ -f "/opt/elysian-sprite-studio/banner.sh" ]]; then
     show_delavar_banner "install"
 fi
 
+# Parse optional CLI flags
+for arg in "$@"; do
+    case "${arg}" in
+        --skip-connectivity-check|--offline)
+            SKIP_CONNECTIVITY_CHECK=1
+            ;;
+        --help|-h)
+            echo "Usage: sudo bash install.sh [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --skip-connectivity-check, --offline   Bypass pre-flight network checks"
+            echo "  --help, -h                             Display this help message"
+            exit 0
+            ;;
+    esac
+done
+
 # ------------------------------------------------------------------------------
 # 1. Root & Privilege Verification
 # ------------------------------------------------------------------------------
@@ -119,12 +136,149 @@ fi
 log_success "Disk space verification passed (${FREE_KB} KB available)."
 
 # Check internet connectivity
-log_info "Verifying internet connectivity..."
-if curl -s --connect-timeout 5 https://github.com > /dev/null 2>&1 || curl -s --connect-timeout 5 https://google.com > /dev/null 2>&1; then
-    log_success "Internet connectivity confirmed."
+log_info "Verifying internet connectivity and required endpoints..."
+
+FAILED_ENDPOINT=""
+FAILED_URL=""
+FAILED_HTTP_CODE="000"
+FAILED_CURL_ERR=0
+
+probe_endpoint() {
+    local url="$1"
+    local label="$2"
+    local connect_timeout="${3:-5}"
+    local max_time="${4:-8}"
+    local retries="${5:-2}"
+
+    local attempt=1
+    local last_code="000"
+    local last_err=0
+
+    while [[ "${attempt}" -le "${retries}" ]]; do
+        if command -v curl >/dev/null 2>&1; then
+            local http_code=""
+            local curl_exit=0
+            # Use HEAD request (-I) with follow redirects (-L) to verify HTTPS reachability without downloading large payloads
+            http_code=$(curl -s -L --head \
+                --connect-timeout "${connect_timeout}" \
+                --max-time "${max_time}" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                "${url}" 2>/dev/null) || curl_exit=$?
+
+            if [[ "${curl_exit}" -eq 0 && "${http_code}" =~ ^[23][0-9]{2}$ ]]; then
+                log_success "Endpoint verified: ${label} (HTTP ${http_code})"
+                return 0
+            fi
+
+            # Automatic IPv4 fallback if IPv6 route has black holes or delays (common in Ubuntu 24.04)
+            local ipv4_code=""
+            local ipv4_exit=0
+            ipv4_code=$(curl -4 -s -L --head \
+                --connect-timeout "${connect_timeout}" \
+                --max-time "${max_time}" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                "${url}" 2>/dev/null) || ipv4_exit=$?
+
+            if [[ "${ipv4_exit}" -eq 0 && "${ipv4_code}" =~ ^[23][0-9]{2}$ ]]; then
+                log_success "Endpoint verified via IPv4 fallback: ${label} (HTTP ${ipv4_code})"
+                return 0
+            fi
+
+            last_code="${http_code:-${ipv4_code:-000}}"
+            last_err="${curl_exit:-${ipv4_exit:-1}}"
+
+        elif command -v wget >/dev/null 2>&1; then
+            if wget -q --spider --timeout="${max_time}" --tries=1 "${url}" 2>/dev/null; then
+                log_success "Endpoint verified via wget: ${label}"
+                return 0
+            fi
+            if wget -4 -q --spider --timeout="${max_time}" --tries=1 "${url}" 2>/dev/null; then
+                log_success "Endpoint verified via wget IPv4: ${label}"
+                return 0
+            fi
+            last_err=$?
+        else
+            # Pure Bash /dev/tcp socket check if neither curl nor wget is available
+            local host
+            host=$(echo "${url}" | sed -E 's|^https?://([^/:]+).*|\1|')
+            local port=443
+            [[ "${url}" =~ ^http:// ]] && port=80
+            if (exec 3<>/dev/tcp/${host}/${port}) 2>/dev/null; then
+                exec 3>&-
+                log_success "Endpoint verified via raw TCP socket: ${label} (${host}:${port})"
+                return 0
+            fi
+            last_err=$?
+        fi
+
+        attempt=$((attempt + 1))
+        [[ "${attempt}" -le "${retries}" ]] && sleep 1
+    done
+
+    FAILED_ENDPOINT="${label}"
+    FAILED_URL="${url}"
+    FAILED_HTTP_CODE="${last_code}"
+    FAILED_CURL_ERR="${last_err}"
+    return 1
+}
+
+if [[ "${SKIP_CONNECTIVITY_CHECK:-0}" == "1" || "${OFFLINE_INSTALL:-0}" == "1" ]]; then
+    log_warn "Internet connectivity verification skipped via environment flag."
 else
-    log_error "Internet connection check failed. Cannot download project dependencies."
-    exit 1
+    # 1. Verify required package registry (npm packages for project dependencies)
+    if ! probe_endpoint "https://registry.npmjs.org" "NPM Package Registry" 5 8 2; then
+        log_error "Required dependency registry is unreachable: NPM Registry (https://registry.npmjs.org)"
+        log_error "Diagnostics: HTTP Status: ${FAILED_HTTP_CODE:-000}, Curl Exit Code: ${FAILED_CURL_ERR:-1}"
+        echo ""
+        echo -e "${YELLOW}Troubleshooting & Actionable Steps:${RESET}"
+        echo "  1. Test DNS resolution:        getent hosts registry.npmjs.org"
+        echo "  2. Test HTTPS connection:      curl -I --connect-timeout 5 https://registry.npmjs.org"
+        echo "  3. Test IPv4 routing:          curl -4 -I --connect-timeout 5 https://registry.npmjs.org"
+        echo "  4. If behind a proxy, set:     export https_proxy=http://proxy:port && sudo -E bash install.sh"
+        echo "  5. To bypass this check:       sudo SKIP_CONNECTIVITY_CHECK=1 bash install.sh"
+        echo ""
+        exit 1
+    fi
+
+    # 2. Verify runtime download source ONLY if a local Bun or Node.js runtime is not already installed
+    HAS_LOCAL_RUNTIME=false
+    if command -v bun >/dev/null 2>&1 || [[ -x "/usr/local/bin/bun" ]]; then
+        HAS_LOCAL_RUNTIME=true
+    elif command -v node >/dev/null 2>&1; then
+        NODE_CHECK_VER=$(node -v 2>/dev/null | sed 's/v//' | cut -d. -f1 || echo "0")
+        [[ "${NODE_CHECK_VER}" -ge 18 ]] && HAS_LOCAL_RUNTIME=true
+    fi
+
+    if [[ "${HAS_LOCAL_RUNTIME}" == "true" ]]; then
+        log_success "Existing local runtime detected. External runtime download check is not required."
+    else
+        log_info "Verifying automated runtime provisioning sources..."
+        RUNTIME_SOURCE_REACHABLE=false
+
+        if probe_endpoint "https://bun.sh" "Bun Installer" 5 8 2; then
+            RUNTIME_SOURCE_REACHABLE=true
+        elif probe_endpoint "https://github.com" "GitHub (Bun Binaries)" 5 8 2; then
+            RUNTIME_SOURCE_REACHABLE=true
+        elif probe_endpoint "https://deb.nodesource.com" "NodeSource LTS" 5 8 2; then
+            RUNTIME_SOURCE_REACHABLE=true
+        fi
+
+        if [[ "${RUNTIME_SOURCE_REACHABLE}" != "true" ]]; then
+            log_error "Cannot reach any automated runtime acquisition source (Bun.sh, GitHub, or NodeSource)."
+            log_error "Diagnostics: Last HTTP Status: ${FAILED_HTTP_CODE:-000}, Last Exit Code: ${FAILED_CURL_ERR:-1}"
+            echo ""
+            echo -e "${YELLOW}Actionable Steps:${RESET}"
+            echo "  1. Pre-install Bun manually: curl -fsSL https://bun.sh/install | bash"
+            echo "  2. Or pre-install Node.js:  sudo apt-get install -y nodejs"
+            echo "  3. If behind a proxy, run:   sudo -E bash install.sh"
+            echo ""
+            exit 1
+        fi
+    fi
+
+    log_success "Internet connectivity confirmed for all required dependencies."
 fi
 
 # ------------------------------------------------------------------------------

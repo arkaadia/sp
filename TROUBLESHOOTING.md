@@ -133,21 +133,39 @@ If you want to use the AI animation breakdown assistant:
 ## 6. Dependency Installation Fails (Network / Proxy / Frozen Lockfile)
 
 ### Cause:
-Network timeout or firewall preventing connection to package registries.
+The installer verifies that required package registries and runtime download sources are reachable before starting. If an external endpoint times out or drops packets, this check prevents a partial, broken installation.
 
-### Solution:
-Test your connection to registry endpoints:
+### Diagnosis & Testing:
+Run these diagnostic commands to test required endpoints:
 ```bash
-curl -I https://registry.npmjs.org
-curl -I https://bun.sh
+# Test DNS resolution
+getent hosts registry.npmjs.org
+getent hosts github.com
+
+# Test HTTPS HEAD connectivity (headers only)
+curl -I --connect-timeout 5 https://registry.npmjs.org
+curl -I --connect-timeout 5 https://github.com
+
+# Test IPv4 routing (if IPv6 has route black holes)
+curl -4 -I --connect-timeout 5 https://registry.npmjs.org
 ```
 
-If you are behind a corporate proxy, export your proxy variables before running `install.sh`:
-```bash
-export http_proxy=http://proxy.yourcompany.com:8080
-export https_proxy=http://proxy.yourcompany.com:8080
-sudo -E bash install.sh
-```
+### Solutions:
+1. **Corporate Proxy / VPN**: Preserve proxy environment variables when running with sudo:
+   ```bash
+   export http_proxy=http://proxy.yourcompany.com:8080
+   export https_proxy=http://proxy.yourcompany.com:8080
+   sudo -E bash install.sh
+   ```
+2. **Broken IPv6 Routing (Common on Ubuntu 24.04 Cloud VPS)**:
+   The installer automatically falls back to IPv4 (`curl -4`) if dual-stack IPv6 stalls.
+3. **Bypassing the Connectivity Check**:
+   If you have pre-cached dependencies or already verified network access:
+   ```bash
+   sudo bash install.sh --skip-connectivity-check
+   # or
+   sudo SKIP_CONNECTIVITY_CHECK=1 bash install.sh
+   ```
 
 ---
 
