@@ -19,6 +19,7 @@ import { AssetLibraryView } from './components/AssetLibraryView';
 
 export default function App() {
   const [selectedAssetForVariation, setSelectedAssetForVariation] = useState<any>(null);
+  const [slicerInitialImage, setSlicerInitialImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'library' | 'github'>('studio');
   const [packList, setPackList] = useState<CharacterPack[]>(CHARACTER_PACKS);
   const [currentPackIndex, setCurrentPackIndex] = useState<number>(0);
@@ -110,6 +111,7 @@ export default function App() {
 
         {activeTab === 'slicer' && (
           <SpriteSlicer
+            initialImageUrl={slicerInitialImage}
             onApplyCustomPack={handleApplyCustomPack}
             removeBg={removeBg}
             bgTolerance={bgTolerance}
@@ -148,7 +150,13 @@ export default function App() {
 
 
         {activeTab === 'generator' && (
-          <CharacterGenerator initialAsset={selectedAssetForVariation} />
+          <CharacterGenerator
+            initialAsset={selectedAssetForVariation}
+            onSendToSlicer={(url) => {
+              setSlicerInitialImage(url);
+              setActiveTab('slicer');
+            }}
+          />
         )}
 
         {activeTab === 'library' && (

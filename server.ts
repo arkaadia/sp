@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import multer from 'multer';
-import { AssetLibrary } from './src/utils/AssetLibrary.ts';
+import { AssetLibrary } from './src/utils/AssetLibrary';
 
 
 dotenv.config();
@@ -140,7 +140,8 @@ app.post('/api/openai/generate-character', upload.single('image'), async (req, r
         model: req.file ? 'dall-e-2' : 'dall-e-3',
         generationSettings: {
           style: req.body.style,
-          type: req.body.type
+          type: req.body.type,
+          workflow: req.body.workflow
         },
         imageDimensions: { width: 1024, height: 1024 },
         originalId: req.body.originalId

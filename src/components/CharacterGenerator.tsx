@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Download, RefreshCw, Wand2, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { Grid, Download, RefreshCw, Wand2, Image as ImageIcon, AlertCircle } from 'lucide-react';
 
-export const CharacterGenerator: React.FC<{ initialAsset?: any }> = ({ initialAsset }) => {
+export const CharacterGenerator: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: string) => void }> = ({ initialAsset, onSendToSlicer }) => {
   const [promptData, setPromptData] = useState({
     name: '',
+    workflow: 'Concept Art',
     description: '',
     personality: '',
     type: 'Human',
@@ -57,13 +58,30 @@ export const CharacterGenerator: React.FC<{ initialAsset?: any }> = ({ initialAs
 
   const buildPrompt = () => {
     const parts = [];
+
+    // Inject workflow specific prefix
+    if (promptData.workflow === 'Views') {
+      parts.push('A character design sheet showing clear front, side, and back views.');
+    } else if (promptData.workflow === 'Turnaround Sheet') {
+      parts.push('A professional character turnaround reference sheet.');
+    } else if (promptData.workflow === 'Expression Sheet') {
+      parts.push('A facial expression sheet showing various emotions and reactions.');
+    } else if (promptData.workflow === 'Pose Sheet') {
+      parts.push('An action pose sheet showing the character in multiple dynamic combat or movement poses.');
+    } else if (promptData.workflow === 'Sprite Sheet') {
+      parts.push('A 2D game asset sprite sheet containing multiple frames of animation aligned on a grid layout.');
+    } else {
+      parts.push('A high-quality character concept art illustration.');
+    }
+
     if (promptData.style) parts.push(`Style: ${promptData.style}.`);
     if (promptData.type) parts.push(`Type: ${promptData.type}.`);
     if (promptData.description) parts.push(`Description: ${promptData.description}.`);
     if (promptData.appearance) parts.push(`Appearance: ${promptData.appearance}.`);
     if (promptData.clothing) parts.push(`Clothing: ${promptData.clothing}.`);
-    if (promptData.mood) parts.push(`Mood/Expression: ${promptData.mood}.`);
+    if (promptData.mood && promptData.workflow !== 'Expression Sheet') parts.push(`Mood: ${promptData.mood}.`);
     if (promptData.background) parts.push(`Background: ${promptData.background}.`);
+
     return parts.join(' ');
   };
 
@@ -82,6 +100,7 @@ export const CharacterGenerator: React.FC<{ initialAsset?: any }> = ({ initialAs
       formData.append('name', promptData.name);
       formData.append('type', promptData.type);
       formData.append('style', promptData.style);
+      formData.append('workflow', promptData.workflow);
       if (initialAsset && initialAsset.id) {
         formData.append('originalId', initialAsset.id);
       }
@@ -125,6 +144,26 @@ export const CharacterGenerator: React.FC<{ initialAsset?: any }> = ({ initialAs
           </h2>
 
           <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-amber-400 mb-1">Generation Workflow</label>
+              <select
+                name="workflow"
+                value={promptData.workflow}
+                onChange={handleInputChange}
+                className="w-full bg-[#1e232d] border border-amber-500/50 rounded-md px-3 py-2 text-sm text-white focus:border-amber-400 focus:outline-none shadow-sm"
+              >
+                <option value="Concept Art">Concept Art (Single Character Image)</option>
+                <option value="Views">Views (Front, Side, Back)</option>
+                <option value="Turnaround Sheet">Turnaround Sheet</option>
+                <option value="Expression Sheet">Facial Expression Sheet</option>
+                <option value="Pose Sheet">Action Pose Sheet</option>
+                <option value="Sprite Sheet">2D Sprite Sheet Grid</option>
+              </select>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Note: AI generations do not guarantee perfect character consistency across separate prompts, and raw sprite sheets may require manual slicing alignment.
+              </p>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Character Name (Optional)</label>
               <input
@@ -329,11 +368,20 @@ export const CharacterGenerator: React.FC<{ initialAsset?: any }> = ({ initialAs
               </button>
               <button
                 onClick={handleDownload}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-md text-sm font-bold transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md text-sm font-medium transition-colors"
               >
                 <Download className="w-4 h-4" />
-                Download Original
+                Download
               </button>
+              {promptData.workflow === 'Sprite Sheet' && onSendToSlicer && (
+                <button
+                  onClick={() => onSendToSlicer(generatedImageUrl)}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-md text-sm font-bold transition-colors"
+                >
+                  <Grid className="w-4 h-4" />
+                  Send to Slicer
+                </button>
+              )}
             </div>
           )}
         </div>
