@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import multer from 'multer';
+import { getProvider, getProviders } from './src/utils/providers.js';
 import { AssetLibrary } from './src/utils/AssetLibrary';
 
 
@@ -61,6 +62,28 @@ app.get('/api/assets', async (_req, res) => {
   }
 });
 
+
+// Provider connection verification
+app.get('/api/providers/verify', async (req, res) => {
+  const providerId = req.query.provider as string || 'openai';
+  const provider = getProvider(providerId);
+
+  if (!provider) {
+    return res.status(404).json({ error: `Provider ${providerId} not found` });
+  }
+
+  if (!provider.isConfigured()) {
+    return res.status(503).json({ error: `${provider.name} is not configured.` });
+  }
+
+  const isConnected = await provider.verifyConnection();
+  if (isConnected) {
+    res.json({ status: 'ok', message: `Successfully connected to ${provider.name}` });
+  } else {
+    res.status(500).json({ error: `Failed to verify connection to ${provider.name}` });
+  }
+});
+
 // Health check endpoint for system monitoring, status scripts, and systemd
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -75,56 +98,36 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Endpoint for generating character via OpenAI
-app.post('/api/openai/generate-character', upload.single('image'), async (req, res) => {
-  if (!openai) {
-    return res.status(503).json({
-      error: 'OPENAI_API_KEY is not configured on this server. Please provide it in .env to use the Character Generator.',
-    });
-  }
-
+// Shared generation logic
+async function processGeneration(req: express.Request, res: express.Response) {
   try {
     const { prompt } = req.body;
+    const providerId = req.body.provider || 'openai';
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Valid prompt string is required' });
     }
 
-    let imageUrl = '';
+    const provider = getProvider(providerId);
+    if (!provider) {
+      return res.status(400).json({ error: `Provider ${providerId} is not supported.` });
+    }
 
+    if (!provider.isConfigured()) {
+      return res.status(503).json({ error: `${provider.name} API key is not configured on this server.` });
+    }
+
+    let imageFile: File | undefined = undefined;
     if (req.file) {
-      // If reference image is provided, use dall-e-2 createVariation or edit
-      // Note: OpenAI image variation requires a square PNG file less than 4MB
-      // Converting any image to square PNG in memory is complex, so we will pass it
-      // directly but catch errors if it fails validation on OpenAI side.
-      // Need to convert buffer properly
       const buffer = req.file.buffer as any;
-      const imageFile = new File([buffer], req.file.originalname, { type: req.file.mimetype });
-
-      const response = await openai.images.createVariation({
-        image: imageFile,
-        n: 1,
-        size: '1024x1024',
-      });
-      imageUrl = (response.data && response.data[0]?.url) || '';
-    } else {
-      // Standard text to image using DALL-E 3
-      const response = await openai.images.generate({
-        model: 'dall-e-3',
-        prompt: prompt,
-        n: 1,
-        size: '1024x1024',
-        quality: 'standard',
-        response_format: 'url',
-      });
-      imageUrl = (response.data && response.data[0]?.url) || '';
+      imageFile = new File([buffer], req.file.originalname, { type: req.file.mimetype });
     }
 
-    if (!imageUrl) {
-      throw new Error('No usable image was returned by the API');
-    }
+    const { imageUrl, modelUsed } = await provider.generateImage({
+      prompt,
+      image: imageFile
+    });
 
-    // Fetch the image from the URL and save it to the Asset Library
     const imageRes = await fetch(imageUrl);
     if (!imageRes.ok) {
       throw new Error(`Failed to download generated image: ${imageRes.statusText}`);
@@ -132,17 +135,25 @@ app.post('/api/openai/generate-character', upload.single('image'), async (req, r
     const arrayBuffer = await imageRes.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    let rawSettings = {};
+    if (req.body.settings) {
+       rawSettings = typeof req.body.settings === 'string' ? JSON.parse(req.body.settings) : req.body.settings;
+    } else {
+       // Support backward compatible structure
+       rawSettings = {
+         style: req.body.style,
+         type: req.body.type,
+         workflow: req.body.workflow
+       };
+    }
+
     const assetMetadata = await AssetLibrary.saveAsset(
       {
-        name: req.body.name || 'Generated Character',
+        name: req.body.name || 'Generated Asset',
         prompt,
-        provider: 'OpenAI',
-        model: req.file ? 'dall-e-2' : 'dall-e-3',
-        generationSettings: {
-          style: req.body.style,
-          type: req.body.type,
-          workflow: req.body.workflow
-        },
+        provider: provider.name,
+        model: modelUsed,
+        generationSettings: rawSettings,
         imageDimensions: { width: 1024, height: 1024 },
         originalId: req.body.originalId
       },
@@ -152,54 +163,23 @@ app.post('/api/openai/generate-character', upload.single('image'), async (req, r
     res.json({ imageUrl: assetMetadata.assetLocation, asset: assetMetadata });
 
   } catch (err: any) {
-    console.error('OpenAI error:', err);
-    // Provide meaningful error messages based on OpenAI error types if possible
-    let errorMsg = err.message || 'Failed to generate character';
+    console.error('Generation error:', err);
+    let errorMsg = err.message || 'Failed to generate image';
     if (err.status === 401) errorMsg = 'Authentication failed. Please check your API key.';
     else if (err.status === 429) errorMsg = 'Rate limit exceeded or insufficient quota.';
-    else if (err.status >= 500) errorMsg = 'OpenAI API server error. Please try again later.';
+    else if (err.status >= 500) errorMsg = 'Provider API server error. Please try again later.';
 
     res.status(err.status || 500).json({ error: errorMsg });
   }
-});
+}
 
-// API endpoint for AI prompt assistant or generating additional sprite actions
-app.post('/api/gemini/describe-action', async (req, res) => {
-  if (!ai) {
-    return res.status(503).json({
-      error: 'GEMINI_API_KEY is not configured on this server. AI action breakdown is optional and requires an API key in .env.',
-    });
-  }
+// Endpoint for generic asset generation
+app.post('/api/generate-image', upload.single('image'), processGeneration);
 
-  try {
-    const { actionName, characterStyle } = req.body;
-    if (!actionName) {
-      return res.status(400).json({ error: 'Action name is required' });
-    }
-
-    const prompt = `You are a professional 2D pixel art and sprite animation director.
-Break down an 8-frame 2D animation sequence for a chibi winged dark fantasy elf rogue/assassin performing: "${actionName}".
-Character description: ${characterStyle || 'Chibi winged elf rogue with long white hair, pointed ears, serene closed eyes, hooded cowl scarf, dark tattered tunic with belts, curved silver dagger with chain, majestic white feathered wings.'}
-
-Provide a JSON object with:
-- "actionName": "${actionName}",
-- "fps": 10,
-- "description": "Brief description of the motion curve",
-- "frames": an array of 8 frame descriptions (frame 1 to 8), each with "index" (1-8), "phase" (e.g. Anticipation, Windup, Strike, Apex, Follow-through, Recovery), and "visualPose" (detailed pose of wings, body, legs, arms, and weapon)`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    res.json({ result: JSON.parse(response.text || '{}') });
-  } catch (err: any) {
-    console.error('Gemini error:', err);
-    res.status(500).json({ error: err.message || 'Failed to process AI prompt' });
-  }
+// Alias for backwards compatibility with test scripts
+app.post('/api/openai/generate-character', upload.single('image'), (req, res) => {
+  req.body.provider = 'openai';
+  return processGeneration(req, res);
 });
 
 async function startServer() {

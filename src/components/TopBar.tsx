@@ -63,7 +63,7 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTab, setActiveTab, onOpenE
             activeTab === 'generator' ? 'text-amber-400 border-b-2 border-amber-400 font-semibold' : ''
           }`}
         >
-          Character Generator
+          Asset Studio
         </button>
         <button
           onClick={() => setActiveTab('library')}

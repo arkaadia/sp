@@ -14,7 +14,7 @@ import { ActionArena } from './components/ActionArena';
 import { SpriteSlicer } from './components/SpriteSlicer';
 import { GithubGuideView } from './components/GithubGuideView';
 import { ExportModal } from './components/ExportModal';
-import { CharacterGenerator } from './components/CharacterGenerator';
+import { AssetStudio } from './components/AssetStudio';
 import { AssetLibraryView } from './components/AssetLibraryView';
 
 export default function App() {
@@ -150,7 +150,7 @@ export default function App() {
 
 
         {activeTab === 'generator' && (
-          <CharacterGenerator
+          <AssetStudio
             initialAsset={selectedAssetForVariation}
             onSendToSlicer={(url) => {
               setSlicerInitialImage(url);
