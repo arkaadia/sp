@@ -2,8 +2,8 @@
 # ==============================================================================
 # DELAVAR STUDIO — Unified Terminal Banner
 # ==============================================================================
-# Displays a professional centered ASCII banner for Elysian Sprite Studio
-# installer and uninstaller scripts. Supports terminal width auto-detection,
+# Displays the official 42-style DELAVAR STUDIO banner for Elysian Sprite Studio
+# installer and uninstaller scripts. Supports responsive terminal width auto-detection,
 # color suppression for non-interactive pipes, and graceful error recovery.
 # ==============================================================================
 
@@ -19,6 +19,7 @@ show_delavar_banner() {
     # ANSI Colors
     local PRIMARY_COLOR=""
     local FRAME_COLOR=""
+    local ACCENT_COLOR=""
     local RESET=""
 
     if [ "$is_term" -eq 1 ]; then
@@ -27,17 +28,19 @@ show_delavar_banner() {
             # Bold Bright White for Uninstaller
             PRIMARY_COLOR="\033[1;97m"
             FRAME_COLOR="\033[0;37m"
+            ACCENT_COLOR="\033[1;37m"
         else
             # Bold Bright Blue for Installer
             PRIMARY_COLOR="\033[1;94m"
             FRAME_COLOR="\033[0;34m"
+            ACCENT_COLOR="\033[1;36m"
         fi
     fi
 
     # Subtitle configuration
-    local subtitle="ELYSIAN SPRITE STUDIO • LINUX INSTALLER"
+    local subtitle="✦  ELYSIAN SPRITE STUDIO  •  LINUX INSTALLER  ✦"
     if [[ "$mode" == "uninstall" ]]; then
-        subtitle="ELYSIAN SPRITE STUDIO • LINUX UNINSTALLER"
+        subtitle="✦  ELYSIAN SPRITE STUDIO  •  LINUX UNINSTALLER  ✦"
     fi
 
     # Detect terminal columns (fallback to 80)
@@ -50,58 +53,108 @@ show_delavar_banner() {
     [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
     [ "$cols" -lt 40 ] && cols=80
 
-    # Layout dimensions: inner width 75, total box width 77
-    local inner_width=75
-    local total_width=$((inner_width + 2))
-    local pad=0
-    if [ "$cols" -gt "$total_width" ]; then
-        pad=$(( (cols - total_width) / 2 ))
-    fi
-
-    local pad_str=""
-    if [ "$pad" -gt 0 ]; then
-        pad_str=$(printf '%*s' "$pad" "")
-    fi
-
-    local border_line
-    border_line=$(printf '─%.0s' $(seq 1 "$inner_width"))
-
-    local sub_len=${#subtitle}
-    local sub_pad=0
-    if [ "$inner_width" -gt "$sub_len" ]; then
-        sub_pad=$(( (inner_width - sub_len) / 2 ))
-    fi
-    local sub_pad_left=""
-    local sub_pad_right=""
-    if [ "$sub_pad" -gt 0 ]; then
-        sub_pad_left=$(printf '%*s' "$sub_pad" "")
-        sub_pad_right=$(printf '%*s' $((inner_width - sub_len - sub_pad)) "")
-    fi
+    # Official 7-line DELAVAR STUDIO banner art
+    local u0="::::::      :::::::::  :::::::::: :::            :::     :::     :::     :::     :::::::::        :::::::: ::::::::::: :::    ::: ::::::::: ::::::::::: ::::::::       ::::::"
+    local u1=":+:         :+:    :+: :+:        :+:          :+: :+:   :+:     :+:   :+: :+:   :+:    :+:      :+:    :+:    :+:     :+:    :+: :+:    :+:    :+:    :+:    :+:         :+:"
+    local u2="+:+         +:+    +:+ +:+        +:+         +:+   +:+  +:+     +:+  +:+   +:+  +:+    +:+      +:+           +:+     +:+    +:+ +:+    +:+    +:+    +:+    +:+         +:+"
+    local u3="+#+         +#+    +:+ +#++:++#   +#+        +#++:++#++: +#+     +:+ +#++:++#++: +#++:++#:       +#++:++#++    +#+     +#+    +:+ +#+    +:+    +#+    +#+    +:+         +#+"
+    local u4="+#+         +#+    +#+ +#+        +#+        +#+     +#+  +#+   +#+  +#+     +#+ +#+    +#+             +#+    +#+     +#+    +#+ +#+    +#+    +#+    +#+    +:+         +#+"
+    local u5="#+#         #+#    #+# #+#        #+#        #+#     #+#   #+#+#+#   #+#     #+# #+#    #+#      #+#    #+#    #+#     #+#    #+# #+#    #+#    #+#    #+#    #+#         #+#"
+    local u6="######      #########  ########## ########## ###     ###     ###     ###     ### ###    ###       ########     ###      ########  ######### ########### ########       ######"
 
     # Banner rendering with error suppression to prevent script interruption
     {
-        echo ""
-        echo -e "${pad_str}${FRAME_COLOR}┌${border_line}┐${RESET}"
-        echo -e "${pad_str}${FRAME_COLOR}│$(printf '%*s' "$inner_width" "")│${RESET}"
+        if [ "$cols" -ge 177 ]; then
+            # Full 173-column single-line banner for widescreen terminals
+            local inner_w=175
+            local total_w=177
+            local pad=$(( (cols - total_w) / 2 ))
+            local pad_str=""
+            [ "$pad" -gt 0 ] && pad_str=$(printf '%*s' "$pad" "")
+            local border
+            border=$(printf '─%.0s' $(seq 1 "$inner_w"))
 
-        # 5 rows of DELAVAR STUDIO FIGlet art (padded to exactly 75 chars)
-        local r1="  ____  _____ _       ___   __   _    ____  ____ _____ _   _ ____ ___ ___   "
-        local r2=" |  _ \| ____| |     / \ \ / /  / \  |  _ \/ ___|_   _| | | |  _ \_ _/ _ \  "
-        local r3=" | | | |  _| | |    / _ \ V /  / _ \ | |_) \___ \ | | | | | | | | | | | | | "
-        local r4=" | |_| | |___| |___/ ___ \| | / ___ \|  _ < ___) || | | |_| | |_| | | |_| | "
-        local r5=" |____/|_____|____/_/   \_\_|/_/   \_\_| \_|____/ |_|  \___/|____/___|___/  "
+            local sub_len=${#subtitle}
+            local sub_pad=$(( (inner_w - sub_len) / 2 ))
+            local sub_left=""
+            local sub_right=""
+            [ "$sub_pad" -gt 0 ] && sub_left=$(printf '%*s' "$sub_pad" "")
+            [ "$sub_pad" -gt 0 ] && sub_right=$(printf '%*s' $((inner_w - sub_len - sub_pad)) "")
 
-        echo -e "${pad_str}${FRAME_COLOR}│${RESET}${PRIMARY_COLOR}${r1}${RESET}${FRAME_COLOR}│${RESET}"
-        echo -e "${pad_str}${FRAME_COLOR}│${RESET}${PRIMARY_COLOR}${r2}${RESET}${FRAME_COLOR}│${RESET}"
-        echo -e "${pad_str}${FRAME_COLOR}│${RESET}${PRIMARY_COLOR}${r3}${RESET}${FRAME_COLOR}│${RESET}"
-        echo -e "${pad_str}${FRAME_COLOR}│${RESET}${PRIMARY_COLOR}${r4}${RESET}${FRAME_COLOR}│${RESET}"
-        echo -e "${pad_str}${FRAME_COLOR}│${RESET}${PRIMARY_COLOR}${r5}${RESET}${FRAME_COLOR}│${RESET}"
+            echo ""
+            echo -e "${pad_str}${FRAME_COLOR}┌${border}┐${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│$(printf '%*s' "$inner_w" "")│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${u0}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${u1}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${u2}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${u3}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${u4}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${u5}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${u6}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│$(printf '%*s' "$inner_w" "")│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}├${border}┤${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│${RESET}${ACCENT_COLOR}${sub_left}${subtitle}${sub_right}${RESET}${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}└${border}┘${RESET}"
+            echo ""
+        else
+            # Standard terminal (80-120 columns): Stack DELAVAR & STUDIO perfectly without wrapping
+            local d0=":::::::::  :::::::::: :::            :::     :::     :::     :::     :::::::::"
+            local d1=":+:    :+: :+:        :+:          :+: :+:   :+:     :+:   :+: :+:   :+:    :+:"
+            local d2="+:+    +:+ +:+        +:+         +:+   +:+  +:+     +:+  +:+   +:+  +:+    +:+"
+            local d3="+#+    +:+ +#++:++#   +#+        +#++:++#++: +#+     +:+ +#++:++#++: +#++:++#:"
+            local d4="+#+    +#+ +#+        +#+        +#+     +#+  +#+   +#+  +#+     +#+ +#+    +#+"
+            local d5="#+#    #+# #+#        #+#        #+#     #+#   #+#+#+#   #+#     #+# #+#    #+#"
+            local d6="#########  ########## ########## ###     ###     ###     ###     ### ###    ###"
 
-        echo -e "${pad_str}${FRAME_COLOR}│$(printf '%*s' "$inner_width" "")│${RESET}"
-        echo -e "${pad_str}${FRAME_COLOR}├${border_line}┤${RESET}"
-        echo -e "${pad_str}${FRAME_COLOR}│${RESET}${PRIMARY_COLOR}${sub_pad_left}${subtitle}${sub_pad_right}${RESET}${FRAME_COLOR}│${RESET}"
-        echo -e "${pad_str}${FRAME_COLOR}└${border_line}┘${RESET}"
-        echo ""
+            local s0="       :::::::: ::::::::::: :::    ::: ::::::::: ::::::::::: ::::::::"
+            local s1="      :+:    :+:    :+:     :+:    :+: :+:    :+:    :+:    :+:    :+:"
+            local s2="      +:+           +:+     +:+    +:+ +:+    +:+    +:+    +:+    +:+"
+            local s3="      +#++:++#++    +#+     +#+    +:+ +#+    +:+    +#+    +#+    +:+"
+            local s4="             +#+    +#+     +#+    +#+ +#+    +#+    +#+    +#+    +#+"
+            local s5="      #+#    #+#    #+#     #+#    #+# #+#    #+#    #+#    #+#    +#+"
+            local s6="       ########     ###      ########  ######### ########### ########"
+
+            local inner_w=81
+            local total_w=83
+            local pad=0
+            [ "$cols" -gt "$total_w" ] && pad=$(( (cols - total_w) / 2 ))
+            local pad_str=""
+            [ "$pad" -gt 0 ] && pad_str=$(printf '%*s' "$pad" "")
+            local border
+            border=$(printf '─%.0s' $(seq 1 "$inner_w"))
+
+            local sub_len=${#subtitle}
+            local sub_pad=0
+            [ "$inner_w" -gt "$sub_len" ] && sub_pad=$(( (inner_w - sub_len) / 2 ))
+            local sub_left=""
+            local sub_right=""
+            [ "$sub_pad" -gt 0 ] && sub_left=$(printf '%*s' "$sub_pad" "")
+            [ "$sub_pad" -gt 0 ] && sub_right=$(printf '%*s' $((inner_w - sub_len - sub_pad)) "")
+
+            echo ""
+            echo -e "${pad_str}${FRAME_COLOR}┌${border}┐${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│$(printf '%*s' "$inner_w" "")│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${d0}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${d1}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${d2}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${d3}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${d4}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${d5}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${d6}${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│$(printf '%*s' "$inner_w" "")│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${s0}        ${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${s1}        ${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${s2}        ${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${s3}        ${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${s4}        ${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${s5}        ${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│ ${RESET}${PRIMARY_COLOR}${s6}        ${RESET} ${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│$(printf '%*s' "$inner_w" "")│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}├${border}┤${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}│${RESET}${ACCENT_COLOR}${sub_left}${subtitle}${sub_right}${RESET}${FRAME_COLOR}│${RESET}"
+            echo -e "${pad_str}${FRAME_COLOR}└${border}┘${RESET}"
+            echo ""
+        fi
     } 2>/dev/null || true
 }
 
