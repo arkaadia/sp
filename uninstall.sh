@@ -29,6 +29,10 @@ if [[ -f "${SOURCE_DIR}/banner.sh" ]]; then
     # shellcheck source=/dev/null
     source "${SOURCE_DIR}/banner.sh"
     show_delavar_banner "uninstall"
+elif [[ -f "./banner.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "./banner.sh"
+    show_delavar_banner "uninstall"
 elif [[ -f "/opt/elysian-sprite-studio/banner.sh" ]]; then
     # shellcheck source=/dev/null
     source "/opt/elysian-sprite-studio/banner.sh"

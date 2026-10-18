@@ -237,6 +237,7 @@ To remove the application and service:
 sudo bash uninstall.sh
 ```
 
+- Displays the **DELAVAR STUDIO** terminal banner (in bold white) upon execution.
 - Stops and deletes the `sprite-studio` systemd service.
 - Removes `/usr/local/bin/sprite-studio`.
 - **Preserves your data and `.env` by default** in `/opt/elysian-sprite-studio-backup-TIMESTAMP`.

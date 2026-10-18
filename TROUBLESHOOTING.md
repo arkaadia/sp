@@ -170,3 +170,13 @@ Expected output:
   "uptimeSeconds": 142
 }
 ```
+
+---
+
+## 8. Terminal Banner Display & Non-Interactive Pipes
+
+The installer and uninstaller display a centered **DELAVAR STUDIO** ASCII banner.
+
+- **Piped / CI / Log Redirects**: If `install.sh` or `uninstall.sh` is piped to a file or CI log (`sudo bash install.sh > install.log`), ANSI color codes are automatically stripped to keep the log file clean and readable.
+- **Dumb Terminals**: If `TERM=dumb`, color escapes are suppressed automatically.
+- **Non-Fatal**: Banner rendering errors never interrupt or abort installation or uninstallation routines.
