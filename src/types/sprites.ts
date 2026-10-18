@@ -55,3 +55,16 @@ export interface HitboxConfig {
   width: number;
   height: number;
 }
+
+export interface AssetMetadata {
+  id: string;
+  name: string;
+  prompt: string;
+  provider: string;
+  model: string;
+  generationSettings: any;
+  creationTimestamp: string;
+  imageDimensions: { width: number; height: number };
+  assetLocation: string;
+  originalId?: string;
+}

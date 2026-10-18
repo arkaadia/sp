@@ -14,9 +14,13 @@ import { ActionArena } from './components/ActionArena';
 import { SpriteSlicer } from './components/SpriteSlicer';
 import { GithubGuideView } from './components/GithubGuideView';
 import { ExportModal } from './components/ExportModal';
+import { AssetStudio } from './components/AssetStudio';
+import { AssetLibraryView } from './components/AssetLibraryView';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'github'>('studio');
+  const [selectedAssetForVariation, setSelectedAssetForVariation] = useState<any>(null);
+  const [slicerInitialImage, setSlicerInitialImage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'library' | 'github'>('studio');
   const [packList, setPackList] = useState<CharacterPack[]>(CHARACTER_PACKS);
   const [currentPackIndex, setCurrentPackIndex] = useState<number>(0);
   const [selectedAction, setSelectedAction] = useState<SpriteAction>('idle');
@@ -107,6 +111,7 @@ export default function App() {
 
         {activeTab === 'slicer' && (
           <SpriteSlicer
+            initialImageUrl={slicerInitialImage}
             onApplyCustomPack={handleApplyCustomPack}
             removeBg={removeBg}
             bgTolerance={bgTolerance}
@@ -142,6 +147,25 @@ export default function App() {
             bgSmoothness={bgSmoothness}
           />
         )}
+
+
+        {activeTab === 'generator' && (
+          <AssetStudio
+            initialAsset={selectedAssetForVariation}
+            onSendToSlicer={(url) => {
+              setSlicerInitialImage(url);
+              setActiveTab('slicer');
+            }}
+          />
+        )}
+
+        {activeTab === 'library' && (
+          <AssetLibraryView onGenerateVariation={(asset) => {
+            setSelectedAssetForVariation(asset);
+            setActiveTab('generator');
+          }} />
+        )}
+
 
         {activeTab === 'github' && <GithubGuideView />}
       </main>

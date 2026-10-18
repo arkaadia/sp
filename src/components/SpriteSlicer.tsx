@@ -16,6 +16,7 @@ import { CharacterPack, FrameDefinition, SpriteAction } from '../types/sprites';
 import { loadImage, processFrameCanvas } from '../utils/imageProcessor';
 
 interface SpriteSlicerProps {
+  initialImageUrl?: string | null;
   onApplyCustomPack: (pack: CharacterPack) => void;
   removeBg: boolean;
   bgTolerance: number;
@@ -23,6 +24,7 @@ interface SpriteSlicerProps {
 }
 
 export const SpriteSlicer: React.FC<SpriteSlicerProps> = ({
+  initialImageUrl,
   onApplyCustomPack,
   removeBg,
   bgTolerance,
@@ -38,6 +40,18 @@ export const SpriteSlicer: React.FC<SpriteSlicerProps> = ({
   const [cols, setCols] = useState<number>(4);
   const [rows, setRows] = useState<number>(2);
   const [totalFrames, setTotalFrames] = useState<number>(8);
+
+  useEffect(() => {
+    if (initialImageUrl) {
+      setUploadedImageUrl(initialImageUrl);
+      const img = new Image();
+      img.onload = () => {
+        setImageDimensions({ width: img.width, height: img.height });
+      };
+      img.src = initialImageUrl;
+    }
+  }, [initialImageUrl]);
+
   const [offsetX, setOffsetX] = useState<number>(0);
   const [offsetY, setOffsetY] = useState<number>(0);
   const [spacingX, setSpacingX] = useState<number>(0);
