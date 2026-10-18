@@ -30,6 +30,8 @@ cd sp
 sudo bash install.sh
 ```
 
+Upon launching, the installer displays the **DELAVAR STUDIO** terminal banner (in bold bright blue) and automatically proceeds with pre-flight checks.
+
 ### What `install.sh` Does Automatically:
 1. **OS Detection**: Validates Linux distribution via `/etc/os-release`.
 2. **Pre-flight Checks**: Verifies internet connectivity and free disk space.

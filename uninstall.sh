@@ -20,6 +20,21 @@ log_success() { echo -e "${GREEN}[SUCCESS]${RESET} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${RESET} $1"; }
 log_error() { echo -e "${RED}[ERROR]${RESET} $1" >&2; }
 
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ------------------------------------------------------------------------------
+# 0. Delavar Studio Terminal Banner (Uninstaller Mode - Bold White)
+# ------------------------------------------------------------------------------
+if [[ -f "${SOURCE_DIR}/banner.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "${SOURCE_DIR}/banner.sh"
+    show_delavar_banner "uninstall"
+elif [[ -f "/opt/elysian-sprite-studio/banner.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "/opt/elysian-sprite-studio/banner.sh"
+    show_delavar_banner "uninstall"
+fi
+
 if [[ "${EUID}" -ne 0 ]]; then
     log_error "This script must be run as root or with sudo privileges."
     echo "Usage: sudo bash uninstall.sh [--purge]"
@@ -37,14 +52,6 @@ PURGE=false
 if [[ "${1:-}" == "--purge" || "${1:-}" == "-f" ]]; then
     PURGE=true
 fi
-
-echo -e "${BOLD}${RED}"
-cat << "EOF"
-============================================================
-       Elysian Sprite Studio - Uninstallation
-============================================================
-EOF
-echo -e "${RESET}"
 
 echo "This uninstaller will perform the following actions:"
 echo "  1. Stop and disable the systemd service '${SERVICE_NAME}'"

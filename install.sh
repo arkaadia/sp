@@ -34,6 +34,17 @@ log_error() {
     echo -e "${RED}[ERROR]${RESET} $1" >&2
 }
 
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ------------------------------------------------------------------------------
+# 0. Delavar Studio Terminal Banner
+# ------------------------------------------------------------------------------
+if [[ -f "${SOURCE_DIR}/banner.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "${SOURCE_DIR}/banner.sh"
+    show_delavar_banner "install"
+fi
+
 # ------------------------------------------------------------------------------
 # 1. Root & Privilege Verification
 # ------------------------------------------------------------------------------
@@ -43,20 +54,6 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
-echo -e "${BOLD}${CYAN}"
-cat << "EOF"
-============================================================
-   ____  __           _                ____  __             ___     
-  / __/ / /__ __ ___ (_)___ _ ___     / __/ / /_ __ __ ___ / _ \___ 
- / _/  / // // /(_-</ // _ `// _ \   _\ \  / __// // // _ // // _ \
-/___/ /_/ \_, //___//_/ \_,_//_//_/  /___/  \__/ \_,_//_//_/\___/\___/
-         /___/                                                      
-  2D Sprite Sheet & Tileset Generator - Linux Production Setup
-============================================================
-EOF
-echo -e "${RESET}"
-
-SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/opt/elysian-sprite-studio"
 DATA_DIR="${INSTALL_DIR}/data"
 LOG_DIR="/var/log/elysian-sprite-studio"
