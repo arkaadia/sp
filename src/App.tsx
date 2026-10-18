@@ -14,9 +14,10 @@ import { ActionArena } from './components/ActionArena';
 import { SpriteSlicer } from './components/SpriteSlicer';
 import { GithubGuideView } from './components/GithubGuideView';
 import { ExportModal } from './components/ExportModal';
+import { CharacterGenerator } from './components/CharacterGenerator';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'github'>('studio');
+  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'github'>('studio');
   const [packList, setPackList] = useState<CharacterPack[]>(CHARACTER_PACKS);
   const [currentPackIndex, setCurrentPackIndex] = useState<number>(0);
   const [selectedAction, setSelectedAction] = useState<SpriteAction>('idle');
@@ -141,6 +142,10 @@ export default function App() {
             bgTolerance={bgTolerance}
             bgSmoothness={bgSmoothness}
           />
+        )}
+
+        {activeTab === 'generator' && (
+          <CharacterGenerator />
         )}
 
         {activeTab === 'github' && <GithubGuideView />}

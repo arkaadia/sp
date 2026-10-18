@@ -2,8 +2,8 @@ import React from 'react';
 import { Download } from 'lucide-react';
 
 interface TopBarProps {
-  activeTab: 'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'github';
-  setActiveTab: (tab: 'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'github') => void;
+  activeTab: 'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'github';
+  setActiveTab: (tab: 'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'github') => void;
   onOpenExport: () => void;
 }
 
@@ -56,6 +56,14 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTab, setActiveTab, onOpenE
           }`}
         >
           Action Arena
+        </button>
+        <button
+          onClick={() => setActiveTab('generator')}
+          className={`hover:text-white transition-colors whitespace-nowrap shrink-0 pb-0.5 ${
+            activeTab === 'generator' ? 'text-amber-400 border-b-2 border-amber-400 font-semibold' : ''
+          }`}
+        >
+          Character Generator
         </button>
         <button
           onClick={() => setActiveTab('github')}
