@@ -8,12 +8,25 @@ import OpenAI from 'openai';
 import multer from 'multer';
 import { getProvider, getProviders } from './src/utils/providers.js';
 import { AssetLibrary } from './src/utils/AssetLibrary';
-
+import { validateEndpointUrl, redactSecrets, createRateLimiter, fetchSafeImage } from './src/utils/security.js';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Security & Rate Limiting instances
+const generateRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000, // 1 minute window
+  maxRequests: 30,     // 30 requests per minute
+  message: 'Rate limit exceeded: Too many image generation requests. Please wait a minute before retrying.'
+});
+
+const discoveryRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000, // 1 minute window
+  maxRequests: 60,     // 60 requests per minute
+  message: 'Rate limit exceeded: Too many provider discovery requests. Please wait a moment.'
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -62,8 +75,55 @@ app.get('/api/assets', async (_req, res) => {
   }
 });
 
+// Save custom canvas artwork directly to local asset library
+app.post('/api/assets', upload.single('image') as any, async (req: any, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    const name = req.body.name || 'Custom Painted Canvas Asset';
+    const category = req.body.category || 'character';
+    const style = req.body.style || 'Pixel Art';
+    const width = parseInt(req.body.width, 10) || 512;
+    const height = parseInt(req.body.height, 10) || 512;
 
-// Provider connection verification
+    const assetMetadata = await AssetLibrary.saveAsset(
+      {
+        name,
+        prompt: req.body.prompt || `Custom painted ${category} asset created in Asset Studio Canvas`,
+        provider: 'Elysian Canvas Studio',
+        model: 'Interactive Digital Paint Engine',
+        generationSettings: {
+          category,
+          style,
+          workflow: req.body.workflow || 'Custom Artwork',
+        },
+        imageDimensions: { width, height },
+      },
+      req.file.buffer
+    );
+
+    res.json({ success: true, asset: assetMetadata });
+  } catch (err: any) {
+    console.error('Failed to save canvas asset:', err);
+    res.status(500).json({ error: err.message || 'Failed to save asset' });
+  }
+});
+
+
+
+// Retrieve all configured providers
+app.get('/api/providers', (_req, res) => {
+  const providers = getProviders().map(p => ({
+    id: p.id,
+    name: p.name,
+    defaultModel: p.defaultModel,
+    isConfigured: p.isConfigured()
+  }));
+  res.json({ providers });
+});
+
+// Provider connection verification (GET for simple check, POST for custom credentials)
 app.get('/api/providers/verify', async (req, res) => {
   const providerId = req.query.provider as string || 'openai';
   const provider = getProvider(providerId);
@@ -73,7 +133,7 @@ app.get('/api/providers/verify', async (req, res) => {
   }
 
   if (!provider.isConfigured()) {
-    return res.status(503).json({ error: `${provider.name} is not configured.` });
+    return res.status(503).json({ error: `${provider.name} is not configured on this server.` });
   }
 
   const isConnected = await provider.verifyConnection();
@@ -81,6 +141,103 @@ app.get('/api/providers/verify', async (req, res) => {
     res.json({ status: 'ok', message: `Successfully connected to ${provider.name}` });
   } else {
     res.status(500).json({ error: `Failed to verify connection to ${provider.name}` });
+  }
+});
+
+app.post('/api/providers/verify', discoveryRateLimiter, async (req, res) => {
+  const providerId = req.body.provider as string || 'openai';
+  const { mode, apiKey, baseUrl } = req.body;
+  const provider = getProvider(providerId);
+
+  if (!provider) {
+    return res.status(404).json({ error: `Provider ${providerId} not found` });
+  }
+
+  if (mode === 'custom') {
+    if (!apiKey && !baseUrl) {
+      return res.status(400).json({ error: 'Custom API requires an API Key or Base URL.' });
+    }
+
+    if (baseUrl) {
+      const urlValidation = validateEndpointUrl(baseUrl);
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: urlValidation.error });
+      }
+    }
+
+    try {
+      const isConnected = await provider.verifyConnection({ apiKey: apiKey?.trim(), baseUrl: baseUrl?.trim() });
+      if (isConnected) {
+        return res.json({ status: 'ok', message: 'Successfully connected to Custom API endpoint.' });
+      } else {
+        return res.status(500).json({ error: 'Failed to verify connection to Custom API endpoint.' });
+      }
+    } catch (err: any) {
+      let errMsg = redactSecrets(err?.message || 'Connection failed');
+      if (err?.status === 401) errMsg = 'Authentication failed (401 Unauthorized). Please check your API key.';
+      else if (err?.status === 404) errMsg = 'Endpoint not found (404). Please verify your Base URL.';
+      return res.status(err?.status || 500).json({ error: errMsg });
+    }
+  }
+
+  // Built-in mode
+  if (!provider.isConfigured()) {
+    return res.status(503).json({ error: `${provider.name} is not configured on this server (API key missing).` });
+  }
+
+  try {
+    const isConnected = await provider.verifyConnection();
+    if (isConnected) {
+      res.json({ status: 'ok', message: `Successfully connected to ${provider.name}` });
+    } else {
+      res.status(500).json({ error: `Failed to verify connection to ${provider.name}` });
+    }
+  } catch (err: any) {
+    const errorMsg = redactSecrets(err?.message || 'Connection verification failed');
+    res.status(500).json({ error: errorMsg });
+  }
+});
+
+// Fetch models endpoint with SSRF check and rate limiting
+app.post('/api/providers/models', discoveryRateLimiter, async (req, res) => {
+  const providerId = req.body.provider as string || 'openai';
+  const { mode, apiKey, baseUrl } = req.body;
+  const provider = getProvider(providerId);
+
+  if (!provider) {
+    return res.status(404).json({ error: `Provider ${providerId} not found` });
+  }
+
+  if (mode === 'custom') {
+    if (!apiKey && !baseUrl) {
+      return res.status(400).json({ error: 'API Key or Base URL is required to fetch models from Custom API.' });
+    }
+    if (baseUrl) {
+      const urlValidation = validateEndpointUrl(baseUrl);
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: urlValidation.error });
+      }
+    }
+  }
+
+  if (mode !== 'custom' && !provider.isConfigured()) {
+    return res.status(503).json({ error: `${provider.name} is not configured on this server.` });
+  }
+
+  try {
+    if (!provider.listModels) {
+      return res.status(400).json({ error: `Model listing is not supported by ${provider.name}.` });
+    }
+    const models = await provider.listModels({
+      apiKey: mode === 'custom' ? apiKey?.trim() : undefined,
+      baseUrl: mode === 'custom' ? baseUrl?.trim() : undefined,
+    });
+    res.json({ models });
+  } catch (err: any) {
+    let errMsg = redactSecrets(err?.message || 'Failed to fetch models');
+    if (err?.status === 401) errMsg = 'Authentication failed (401). Invalid API key.';
+    else if (err?.status === 404) errMsg = 'Models endpoint not found (404) at the specified Base URL.';
+    res.status(err?.status || 500).json({ error: errMsg });
   }
 });
 
@@ -99,10 +256,34 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Shared generation logic
-async function processGeneration(req: express.Request, res: express.Response) {
+async function processGeneration(req: any, res: any) {
   try {
     const { prompt } = req.body;
     const providerId = req.body.provider || 'openai';
+
+    let customConfig: {
+      mode?: 'builtin' | 'custom';
+      apiKey?: string;
+      baseUrl?: string;
+      model?: string;
+    } | undefined = undefined;
+
+    if (req.body.customConfig) {
+      try {
+        customConfig = typeof req.body.customConfig === 'string'
+          ? JSON.parse(req.body.customConfig)
+          : req.body.customConfig;
+      } catch (e) {
+        console.warn('Failed to parse customConfig:', e);
+      }
+    }
+
+    if (customConfig?.baseUrl) {
+      const urlValidation = validateEndpointUrl(customConfig.baseUrl);
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: urlValidation.error });
+      }
+    }
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Valid prompt string is required' });
@@ -113,7 +294,8 @@ async function processGeneration(req: express.Request, res: express.Response) {
       return res.status(400).json({ error: `Provider ${providerId} is not supported.` });
     }
 
-    if (!provider.isConfigured()) {
+    const isCustom = customConfig?.mode === 'custom';
+    if (!isCustom && !provider.isConfigured() && !customConfig?.apiKey) {
       return res.status(503).json({ error: `${provider.name} API key is not configured on this server.` });
     }
 
@@ -123,17 +305,27 @@ async function processGeneration(req: express.Request, res: express.Response) {
       imageFile = new File([buffer], req.file.originalname, { type: req.file.mimetype });
     }
 
+    const requestedModel = req.body.model?.trim() || customConfig?.model?.trim() || undefined;
+
     const { imageUrl, modelUsed } = await provider.generateImage({
       prompt,
-      image: imageFile
+      image: imageFile,
+      model: requestedModel,
+      apiKey: customConfig?.apiKey?.trim() || undefined,
+      baseUrl: customConfig?.baseUrl?.trim() || undefined,
     });
 
-    const imageRes = await fetch(imageUrl);
-    if (!imageRes.ok) {
-      throw new Error(`Failed to download generated image: ${imageRes.statusText}`);
+    let buffer: Buffer;
+    if (imageUrl.startsWith('data:')) {
+      const base64Data = imageUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+      buffer = Buffer.from(base64Data, 'base64');
+      if (buffer.length > 25 * 1024 * 1024) {
+        return res.status(413).json({ error: 'Generated image exceeds the 25MB response-size limit.' });
+      }
+    } else {
+      // Safe image download: validates URL with SSRF protection, enforces 25MB limit, and 15s timeout
+      buffer = await fetchSafeImage(imageUrl, 25 * 1024 * 1024);
     }
-    const arrayBuffer = await imageRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
 
     let rawSettings = {};
     if (req.body.settings) {
@@ -151,7 +343,7 @@ async function processGeneration(req: express.Request, res: express.Response) {
       {
         name: req.body.name || 'Generated Asset',
         prompt,
-        provider: provider.name,
+        provider: isCustom ? `Custom (${provider.name})` : provider.name,
         model: modelUsed,
         generationSettings: rawSettings,
         imageDimensions: { width: 1024, height: 1024 },
@@ -163,21 +355,18 @@ async function processGeneration(req: express.Request, res: express.Response) {
     res.json({ imageUrl: assetMetadata.assetLocation, asset: assetMetadata });
 
   } catch (err: any) {
-    console.error('Generation error:', err);
-    let errorMsg = err.message || 'Failed to generate image';
-    if (err.status === 401) errorMsg = 'Authentication failed. Please check your API key.';
-    else if (err.status === 429) errorMsg = 'Rate limit exceeded or insufficient quota.';
-    else if (err.status >= 500) errorMsg = 'Provider API server error. Please try again later.';
-
-    res.status(err.status || 500).json({ error: errorMsg });
+    const status = err.status || 500;
+    const errorMsg = redactSecrets(err.message || 'Failed to generate image');
+    console.error('Generation error:', errorMsg);
+    res.status(status).json({ error: errorMsg });
   }
 }
 
-// Endpoint for generic asset generation
-app.post('/api/generate-image', upload.single('image'), processGeneration);
+// Endpoint for generic asset generation with rate limiting
+app.post('/api/generate-image', generateRateLimiter, upload.single('image') as any, processGeneration);
 
-// Alias for backwards compatibility with test scripts
-app.post('/api/openai/generate-character', upload.single('image'), (req, res) => {
+// Alias for backwards compatibility with test scripts with rate limiting
+app.post('/api/openai/generate-character', generateRateLimiter, upload.single('image') as any, (req: any, res: any) => {
   req.body.provider = 'openai';
   return processGeneration(req, res);
 });
