@@ -2,8 +2,8 @@ import React from 'react';
 import { Download } from 'lucide-react';
 
 interface TopBarProps {
-  activeTab: 'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'library' | 'github';
-  setActiveTab: (tab: 'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'library' | 'github') => void;
+  activeTab: 'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github';
+  setActiveTab: (tab: 'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github') => void;
   onOpenExport: () => void;
 }
 
@@ -23,8 +23,8 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTab, setActiveTab, onOpenE
         Elysian Sprite Studio
       </a>
 
-      {/* Zone 2: 4-5 concise single-line text navigation links */}
-      <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
+      {/* Zone 2: Navigation links */}
+      <nav className="hidden md:flex items-center gap-5 text-sm font-medium text-slate-300 overflow-x-auto">
         <button
           onClick={() => setActiveTab('studio')}
           className={`hover:text-white transition-colors whitespace-nowrap shrink-0 pb-0.5 ${
@@ -40,6 +40,22 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTab, setActiveTab, onOpenE
           }`}
         >
           Upload & Slicer
+        </button>
+        <button
+          onClick={() => setActiveTab('parallax')}
+          className={`hover:text-white transition-colors whitespace-nowrap shrink-0 pb-0.5 ${
+            activeTab === 'parallax' ? 'text-amber-400 border-b-2 border-amber-400 font-semibold' : ''
+          }`}
+        >
+          Environment & Parallax
+        </button>
+        <button
+          onClick={() => setActiveTab('hitbox')}
+          className={`hover:text-white transition-colors whitespace-nowrap shrink-0 pb-0.5 ${
+            activeTab === 'hitbox' ? 'text-amber-400 border-b-2 border-amber-400 font-semibold' : ''
+          }`}
+        >
+          Physics & Hitbox Editor
         </button>
         <button
           onClick={() => setActiveTab('tileset')}

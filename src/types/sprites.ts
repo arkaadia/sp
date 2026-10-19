@@ -68,3 +68,32 @@ export interface AssetMetadata {
   assetLocation: string;
   originalId?: string;
 }
+
+export type BoxType = 'hurtbox' | 'hitbox' | 'collision';
+
+export interface HitboxRect {
+  id: string;
+  name: string;
+  type: BoxType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color?: string;
+}
+
+export interface FramePhysicsData {
+  frameId: string;
+  frameIndex: number;
+  frameLabel: string;
+  frameWidth: number;
+  frameHeight: number;
+  pivot: {
+    x: number;
+    y: number;
+    normalizedX: number;
+    normalizedY: number;
+  };
+  boxes: HitboxRect[];
+}
+

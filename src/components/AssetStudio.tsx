@@ -1,7 +1,169 @@
 import React, { useState, useEffect } from 'react';
-import { Download, RefreshCw, Wand2, Image as ImageIcon, AlertCircle, Grid, Settings2, ChevronDown, ChevronUp, Eye, EyeOff, CheckCircle2, Cpu, Globe, Key, ShieldCheck, X, Sparkles, Check, Info, Paintbrush, Gamepad2 } from 'lucide-react';
+import { Download, RefreshCw, Wand2, Image as ImageIcon, AlertCircle, Grid, Settings2, ChevronDown, ChevronUp, Eye, EyeOff, CheckCircle2, Cpu, Globe, Key, ShieldCheck, X, Sparkles, Check, Info, Paintbrush, Gamepad2, Layers, Sun, Zap } from 'lucide-react';
 import { AVAILABLE_PROVIDERS, getModelCapability } from '../types/providers';
 import { PaintingCanvas } from './PaintingCanvas';
+import sampleAttackSheet from '../assets/images/elf_white_wings_attack_1792304222679.jpg';
+
+// Generate 2D Tangent-Space Normal Map (Standard Purplish-Blue #8080FF)
+export async function generateNormalMapFromUrl(sourceUrl: string, strength: number = 3.0): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width || 512;
+      canvas.height = img.naturalHeight || img.height || 512;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) {
+        resolve('');
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Calculate luminance heightmap
+      const heights = new Float32Array(w * h);
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a === 0) {
+          heights[i / 4] = 0;
+        } else {
+          heights[i / 4] = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255.0;
+        }
+      }
+
+      const outData = ctx.createImageData(w, h);
+      const out = outData.data;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const alpha = data[idx + 3];
+
+          // Transparent background: output flat tangent space normal (128, 128, 255)
+          if (alpha === 0) {
+            out[idx] = 128;
+            out[idx + 1] = 128;
+            out[idx + 2] = 255;
+            out[idx + 3] = 0;
+            continue;
+          }
+
+          const x0 = Math.max(0, x - 1);
+          const x1 = Math.min(w - 1, x + 1);
+          const y0 = Math.max(0, y - 1);
+          const y1 = Math.min(h - 1, y + 1);
+
+          const tl = heights[y0 * w + x0];
+          const t  = heights[y0 * w + x];
+          const tr = heights[y0 * w + x1];
+          const l  = heights[y * w + x0];
+          const r  = heights[y * w + x1];
+          const bl = heights[y1 * w + x0];
+          const b  = heights[y1 * w + x];
+          const br = heights[y1 * w + x1];
+
+          // 3x3 Sobel convolution
+          const dX = (tr + 2.0 * r + br) - (tl + 2.0 * l + bl);
+          const dY = (bl + 2.0 * b + br) - (tl + 2.0 * t + tr);
+
+          const nx = -dX * strength;
+          const ny = -dY * strength;
+          const nz = 1.0;
+
+          const invLen = 1.0 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+          const normX = nx * invLen;
+          const normY = ny * invLen;
+          const normZ = nz * invLen;
+
+          // Standard tangent-space mapping: (128, 128, 255) purplish-blue
+          out[idx] = Math.round((normX * 0.5 + 0.5) * 255);
+          out[idx + 1] = Math.round((normY * 0.5 + 0.5) * 255);
+          out[idx + 2] = Math.round((normZ * 0.5 + 0.5) * 255);
+          out[idx + 3] = alpha;
+        }
+      }
+
+      ctx.putImageData(outData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = sourceUrl;
+  });
+}
+
+// Generate 2D Emission & Glow Mask for self-illumination shaders
+export async function generateEmissionMapFromUrl(sourceUrl: string, threshold: number = 0.52): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width || 512;
+      canvas.height = img.naturalHeight || img.height || 512;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) {
+        resolve('');
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      const w = canvas.width;
+      const h = canvas.height;
+
+      const outData = ctx.createImageData(w, h);
+      const out = outData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+
+        if (a === 0) {
+          out[i] = 0;
+          out[i + 1] = 0;
+          out[i + 2] = 0;
+          out[i + 3] = 0;
+          continue;
+        }
+
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+        const sat = max === 0 ? 0 : (max - min) / max;
+
+        // Isolate bright highlights, magic effects, glowing runes and blade reflections
+        const score = lum * 0.65 + sat * 0.35;
+
+        if (score >= threshold) {
+          const factor = Math.min(2.5, 1.0 + (score - threshold) * 3.0);
+          out[i] = Math.min(255, Math.round(r * factor));
+          out[i + 1] = Math.min(255, Math.round(g * factor));
+          out[i + 2] = Math.min(255, Math.round(b * factor));
+          out[i + 3] = 255;
+        } else {
+          // Dark background for emission mask
+          out[i] = 0;
+          out[i + 1] = 0;
+          out[i + 2] = 0;
+          out[i + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(outData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = sourceUrl;
+  });
+}
 
 export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: string) => void }> = ({ initialAsset, onSendToSlicer }) => {
   // Studio navigation mode: 'canvas' for Painting & Creation Canvas, 'generator' for AI Model & Generator Studio
@@ -38,6 +200,52 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Material & Shader Maps state
+  const [normalMapUrl, setNormalMapUrl] = useState<string | null>(null);
+  const [emissionMapUrl, setEmissionMapUrl] = useState<string | null>(null);
+  const [isProcessingMap, setIsProcessingMap] = useState<boolean>(false);
+  const [activeMapGeneratingType, setActiveMapGeneratingType] = useState<'normal' | 'emission' | null>(null);
+  const [activeComparisonType, setActiveComparisonType] = useState<'normal' | 'emission'>('normal');
+
+  // Trigger generation of Normal or Emission map with realistic shader synthesis delay
+  const handleGenerateMap = async (type: 'normal' | 'emission') => {
+    const source = generatedImageUrl || sampleAttackSheet;
+    if (!source) return;
+
+    setIsProcessingMap(true);
+    setActiveMapGeneratingType(type);
+    setActiveComparisonType(type);
+
+    try {
+      // Realistic shader compilation delay (750ms) for UI feedback
+      await new Promise((r) => setTimeout(r, 750));
+
+      if (type === 'normal') {
+        const url = await generateNormalMapFromUrl(source, 3.2);
+        setNormalMapUrl(url);
+      } else {
+        const url = await generateEmissionMapFromUrl(source, 0.52);
+        setEmissionMapUrl(url);
+      }
+    } catch (err) {
+      console.error('Failed to generate map:', err);
+    } finally {
+      setIsProcessingMap(false);
+      setActiveMapGeneratingType(null);
+    }
+  };
+
+  // Download specific material map as PNG
+  const handleDownloadMap = (mapUrl: string, type: 'normal' | 'emission') => {
+    if (!mapUrl) return;
+    const baseName = (promptData.name || lastGeneratedAsset?.name || 'sprite').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    const a = document.createElement('a');
+    a.href = mapUrl;
+    a.download = `${baseName}_${type}_map.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // Collapsible AI Model & API Configuration state
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -1151,6 +1359,209 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
               )}
             </div>
           )}
+
+          {/* Material & Shader Maps Section under the generated asset preview */}
+          <div className="mt-8 border-t border-slate-800/90 pt-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-amber-400" />
+                  <span>Material & Shader Maps</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Generate 2D Tangent-Space Normal Maps and Emission Illumination Masks for 2D dynamic lighting shaders (Unity URP, Godot 4).
+                </p>
+              </div>
+
+              {/* Action Buttons: Generate Normal Map & Generate Emission Map */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleGenerateMap('normal')}
+                  disabled={isProcessingMap}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  title="Generate standard purplish-blue 2D normal map for directional lighting"
+                >
+                  {isProcessingMap && activeMapGeneratingType === 'normal' ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-200" />
+                      <span>Computing Normals...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sun className="w-3.5 h-3.5 text-indigo-200" />
+                      <span>Generate Normal Map</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleGenerateMap('emission')}
+                  disabled={isProcessingMap}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  title="Generate glowing emission mask for self-illumination and bloom"
+                >
+                  {isProcessingMap && activeMapGeneratingType === 'emission' ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-950" />
+                      <span>Extracting Glow...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+                      <span>Generate Emission Map</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Simulated UI Loading State */}
+            {isProcessingMap && (
+              <div className="p-6 rounded-xl border border-indigo-500/30 bg-indigo-950/20 flex flex-col items-center justify-center gap-3 text-center animate-pulse">
+                <RefreshCw className="w-7 h-7 animate-spin text-indigo-400" />
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-indigo-200">
+                    {activeMapGeneratingType === 'normal'
+                      ? 'Synthesizing 2D Tangent-Space Normal Map...'
+                      : 'Synthesizing 2D Emission & Glow Map...'}
+                  </p>
+                  <p className="text-[11px] text-indigo-300/70 font-mono">
+                    {activeMapGeneratingType === 'normal'
+                      ? 'Applying 3×3 Sobel surface height filters and encoding RGB vectors (128, 128, 255)...'
+                      : 'Isolating high-luminance weapon glints, magical particles, and bloom highlights...'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Side-by-side Visual Comparison Display */}
+            {(normalMapUrl || emissionMapUrl) && !isProcessingMap && (
+              <div className="space-y-3 pt-1">
+                {/* Switcher & Download Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-[#0c0e14] rounded-lg border border-slate-800 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 text-[11px] font-medium mr-1">View Comparison:</span>
+                    {normalMapUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveComparisonType('normal')}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
+                          activeComparisonType === 'normal'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Normal Map (Purplish-Blue)
+                      </button>
+                    )}
+                    {emissionMapUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveComparisonType('emission')}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
+                          activeComparisonType === 'emission'
+                            ? 'bg-amber-500 text-slate-950 shadow-sm'
+                            : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Emission Map (Glow)
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Export / Download Buttons for specific maps */}
+                  <div className="flex items-center gap-2">
+                    {activeComparisonType === 'normal' && normalMapUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadMap(normalMapUrl, 'normal')}
+                        className="px-3 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Download Normal Map as PNG"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Normal Map (.PNG)</span>
+                      </button>
+                    )}
+                    {activeComparisonType === 'emission' && emissionMapUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadMap(emissionMapUrl, 'emission')}
+                        className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Download Emission Map as PNG"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Emission Map (.PNG)</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Side-by-Side Visual Comparison (Original Sprite vs. Normal/Emission Map) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Left: Original Sprite */}
+                  <div className="border border-slate-800 rounded-xl overflow-hidden bg-[#0a0c10] flex flex-col shadow-inner">
+                    <div className="px-3 py-1.5 bg-[#12151c] border-b border-slate-800 flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-slate-300">Original Sprite (Albedo / Diffuse)</span>
+                      <span className="font-mono text-slate-500 text-[10px]">Source RGB</span>
+                    </div>
+                    <div className="p-4 flex-1 flex items-center justify-center min-h-[220px] max-h-[300px] canvas-checkerboard">
+                      <img
+                        src={generatedImageUrl || sampleAttackSheet}
+                        alt="Original Sprite"
+                        className="max-h-[220px] max-w-full object-contain pixelated"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Right: Normal Map or Emission Map */}
+                  <div className="border border-slate-800 rounded-xl overflow-hidden bg-[#0a0c10] flex flex-col shadow-inner">
+                    <div className="px-3 py-1.5 bg-[#12151c] border-b border-slate-800 flex items-center justify-between text-[11px]">
+                      <span className={`font-semibold ${activeComparisonType === 'normal' ? 'text-indigo-300' : 'text-amber-300'}`}>
+                        {activeComparisonType === 'normal' ? 'Normal Map (Tangent-Space)' : 'Emission & Illumination Map'}
+                      </span>
+                      <span className="font-mono text-slate-500 text-[10px]">
+                        {activeComparisonType === 'normal' ? '#8080FF (Purplish-Blue)' : 'Glow Channel'}
+                      </span>
+                    </div>
+                    <div className="p-4 flex-1 flex items-center justify-center min-h-[220px] max-h-[300px] bg-[#0c0e14] relative">
+                      <img
+                        src={activeComparisonType === 'normal' ? normalMapUrl || '' : emissionMapUrl || ''}
+                        alt={activeComparisonType === 'normal' ? 'Normal Map' : 'Emission Map'}
+                        className="max-h-[220px] max-w-full object-contain pixelated shadow-lg"
+                      />
+                    </div>
+                    {/* Visual details footer */}
+                    <div className="px-3 py-1.5 bg-[#0e1117] border-t border-slate-800 text-[10px] text-slate-400 flex items-center justify-between">
+                      {activeComparisonType === 'normal' ? (
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#8080FF] border border-white/20 shrink-0" />
+                          <span className="truncate">Standard Purplish-Blue: R=X normal, G=Y normal, B=Z perpendicular depth</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0" />
+                          <span className="truncate">Emission Mask: Pure black base + luminous highlights for game engine bloom</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Hint when no maps generated yet */}
+            {!normalMapUrl && !emissionMapUrl && !isProcessingMap && (
+              <div className="p-4 rounded-lg bg-[#0b0d12] border border-slate-800/80 text-center text-xs text-slate-500">
+                <p>
+                  Click <strong className="text-indigo-400">"Generate Normal Map"</strong> or{' '}
+                  <strong className="text-amber-400">"Generate Emission Map"</strong> above to compute 2D lighting textures
+                  {generatedImageUrl ? ' for your generated asset' : ' using the sample character'}.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

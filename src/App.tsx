@@ -16,11 +16,13 @@ import { GithubGuideView } from './components/GithubGuideView';
 import { ExportModal } from './components/ExportModal';
 import { AssetStudio } from './components/AssetStudio';
 import { AssetLibraryView } from './components/AssetLibraryView';
+import { PhysicsHitboxEditor } from './components/PhysicsHitboxEditor';
+import { EnvironmentParallaxView } from './components/EnvironmentParallaxView';
 
 export default function App() {
   const [selectedAssetForVariation, setSelectedAssetForVariation] = useState<any>(null);
   const [slicerInitialImage, setSlicerInitialImage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'generator' | 'library' | 'github'>('studio');
+  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github'>('studio');
   const [packList, setPackList] = useState<CharacterPack[]>(CHARACTER_PACKS);
   const [currentPackIndex, setCurrentPackIndex] = useState<number>(0);
   const [selectedAction, setSelectedAction] = useState<SpriteAction>('idle');
@@ -121,6 +123,21 @@ export default function App() {
 
         {activeTab === 'inspector' && (
           <FrameInspector
+            currentPack={currentPack}
+            selectedAction={selectedAction}
+            setSelectedAction={setSelectedAction}
+            removeBg={removeBg}
+            bgTolerance={bgTolerance}
+            bgSmoothness={bgSmoothness}
+          />
+        )}
+
+        {activeTab === 'parallax' && (
+          <EnvironmentParallaxView currentPack={currentPack} />
+        )}
+
+        {activeTab === 'hitbox' && (
+          <PhysicsHitboxEditor
             currentPack={currentPack}
             selectedAction={selectedAction}
             setSelectedAction={setSelectedAction}
