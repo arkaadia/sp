@@ -26,37 +26,118 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/opt/elysian-sprite-studio"
 SERVICE_NAME="sprite-studio"
 
 if [[ ! -d "${INSTALL_DIR}" ]]; then
-    # If not running in /opt, use current directory
-    INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # If not running in /opt and /opt does not exist, use current directory
+    INSTALL_DIR="${SOURCE_DIR}"
 fi
 
 log_info "Updating Elysian Sprite Studio at ${INSTALL_DIR}..."
 
+# 1. Backup .env and persistent user data
+BACKUP_ENV="/tmp/sprite-studio-env-update-backup-$$.env"
+if [[ -f "${INSTALL_DIR}/.env" ]]; then
+    cp "${INSTALL_DIR}/.env" "${BACKUP_ENV}"
+    log_info "Existing configuration backed up."
+fi
+
+BACKUP_DATA="/tmp/sprite-studio-data-update-backup-$$"
+if [[ -d "${INSTALL_DIR}/data" && -n "$(ls -A "${INSTALL_DIR}/data" 2>/dev/null)" ]]; then
+    mkdir -p "${BACKUP_DATA}"
+    cp -r "${INSTALL_DIR}/data/." "${BACKUP_DATA}/"
+    log_info "Existing persistent user data backed up."
+fi
+
+# 2. Update files from Git or Source Directory
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
+    log_info "Fetching latest code from Git repository in ${INSTALL_DIR}..."
+    (cd "${INSTALL_DIR}" && git pull origin main || log_warn "Git pull encountered non-critical status. Continuing...")
+elif [[ "${SOURCE_DIR}" != "${INSTALL_DIR}" ]]; then
+    if [[ -d "${SOURCE_DIR}/.git" ]]; then
+        log_info "Fetching latest code from Git repository at ${SOURCE_DIR}..."
+        (cd "${SOURCE_DIR}" && git pull origin main || log_warn "Git pull in source dir encountered non-critical status.")
+    fi
+    log_info "Synchronizing updated application files from ${SOURCE_DIR} to ${INSTALL_DIR}..."
+    (
+        cd "${SOURCE_DIR}"
+        tar --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.env*' \
+            --exclude='dist' \
+            --exclude='./data' \
+            --exclude='./data/*' \
+            -cf - . | (cd "${INSTALL_DIR}" && tar -xf -)
+    )
+fi
+
+# 3. Restore .env and persistent data safely
+if [[ -f "${BACKUP_ENV}" ]]; then
+    cp "${BACKUP_ENV}" "${INSTALL_DIR}/.env"
+    rm -f "${BACKUP_ENV}"
+    log_success "Restored existing .env configuration."
+fi
+
+if [[ -d "${BACKUP_DATA}" ]]; then
+    mkdir -p "${INSTALL_DIR}/data"
+    cp -rn "${BACKUP_DATA}/." "${INSTALL_DIR}/data/" 2>/dev/null || true
+    rm -rf "${BACKUP_DATA}"
+    log_success "Preserved and restored existing persistent user data."
+elif [[ -d "${SOURCE_DIR}/data" && ! -d "${INSTALL_DIR}/data" ]]; then
+    mkdir -p "${INSTALL_DIR}/data"
+    cp -rn "${SOURCE_DIR}/data/." "${INSTALL_DIR}/data/" 2>/dev/null || true
+fi
+
 cd "${INSTALL_DIR}"
 
-# 1. Backup .env
-if [[ -f "${INSTALL_DIR}/.env" ]]; then
-    cp "${INSTALL_DIR}/.env" "/tmp/sprite-studio-env-update-backup-$$.env"
-    log_info "Configuration backed up."
+# 4. Pre-build Source Verification
+verify_required_source_files() {
+    local target_dir="$1"
+    log_info "Validating required source files in ${target_dir}..."
+
+    local required_files=(
+        "src/App.tsx"
+        "src/main.tsx"
+        "src/index.css"
+        "src/data/spriteData.ts"
+        "src/types/sprites.ts"
+        "src/types/providers.ts"
+        "src/utils/AssetLibrary.ts"
+        "src/utils/imageProcessor.ts"
+        "server.ts"
+        "package.json"
+        "vite.config.ts"
+        "index.html"
+    )
+
+    local missing_files=()
+    for rel_path in "${required_files[@]}"; do
+        if [[ ! -f "${target_dir}/${rel_path}" ]]; then
+            missing_files+=("${rel_path}")
+        fi
+    done
+
+    if [[ "${#missing_files[@]}" -gt 0 ]]; then
+        log_error "Source file validation failed! The following required files are missing from ${target_dir}:"
+        for missing in "${missing_files[@]}"; do
+            echo -e "  ${RED}✖ ${missing}${RESET}" >&2
+        done
+        echo "" >&2
+        log_error "Update aborted to prevent deployment failure. Check packaging exclusion rules."
+        return 1
+    fi
+
+    log_success "All required source files verified (including src/data/spriteData.ts)."
+    return 0
+}
+
+if ! verify_required_source_files "${INSTALL_DIR}"; then
+    exit 1
 fi
 
-# 2. Pull Git updates if it's a git repo
-if [[ -d "${INSTALL_DIR}/.git" ]]; then
-    log_info "Fetching latest code from Git repository..."
-    git pull origin main || log_warn "Git pull encountered non-critical status. Continuing..."
-fi
-
-# Restore .env if needed
-if [[ -f "/tmp/sprite-studio-env-update-backup-$$.env" ]]; then
-    cp "/tmp/sprite-studio-env-update-backup-$$.env" "${INSTALL_DIR}/.env"
-    rm -f "/tmp/sprite-studio-env-update-backup-$$.env"
-fi
-
-# 3. Detect runtime
+# 5. Detect runtime
 RUNTIME_BIN=""
 if command -v bun >/dev/null 2>&1; then
     RUNTIME_BIN="$(command -v bun)"
@@ -92,12 +173,16 @@ sanitize_proxy_env() {
 }
 sanitize_proxy_env
 
-# 4. Install dependencies
+# 6. Install dependencies and build
 log_info "Updating project dependencies..."
+BUILD_SUCCESS=false
+
 if [[ "${RUNTIME_BIN}" =~ bun$ ]]; then
     "${RUNTIME_BIN}" install --frozen-lockfile || "${RUNTIME_BIN}" install
     log_info "Building production bundle with Bun..."
-    "${RUNTIME_BIN}" run build
+    if "${RUNTIME_BIN}" run build; then
+        BUILD_SUCCESS=true
+    fi
 else
     if [[ -f "${INSTALL_DIR}/package-lock.json" ]]; then
         npm ci || npm install
@@ -105,16 +190,24 @@ else
         npm install
     fi
     log_info "Building production bundle with npm..."
-    npm run build
+    if npm run build; then
+        BUILD_SUCCESS=true
+    fi
 fi
 
-# 5. Fix permissions
+if [[ "${BUILD_SUCCESS}" != "true" || ! -f "${INSTALL_DIR}/dist/index.html" ]]; then
+    log_error "Production build failed (${INSTALL_DIR}/dist/index.html was not generated)."
+    exit 1
+fi
+log_success "Production build completed successfully."
+
+# 7. Fix permissions
 SERVICE_USER="spritestudio"
 if id -u "${SERVICE_USER}" >/dev/null 2>&1; then
     chown -R "${SERVICE_USER}:${SERVICE_USER}" "${INSTALL_DIR}"
 fi
 
-# 6. Restart Service
+# 8. Restart Service
 if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
     log_info "Restarting systemd service '${SERVICE_NAME}'..."
     systemctl restart "${SERVICE_NAME}"
@@ -136,4 +229,3 @@ if [[ -f "${INSTALL_DIR}/.env" ]]; then
 fi
 
 log_success "Elysian Sprite Studio updated successfully!"
-EOF

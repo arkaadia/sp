@@ -474,16 +474,27 @@ if [[ -f "${INSTALL_DIR}/.env" ]]; then
     log_info "Existing .env configuration backed up."
 fi
 
+# Preserve existing persistent user data if present
+BACKUP_DATA="/tmp/sprite-studio-data-backup-$$"
+if [[ -d "${DATA_DIR}" && -n "$(ls -A "${DATA_DIR}" 2>/dev/null)" ]]; then
+    mkdir -p "${BACKUP_DATA}"
+    cp -r "${DATA_DIR}/." "${BACKUP_DATA}/"
+    log_info "Existing persistent user data backed up."
+fi
+
 # Copy application files from source directory
 log_info "Copying application files to ${INSTALL_DIR}..."
-# Use tar to copy while excluding git, node_modules, .env, dist, and existing persistent data
+# Use tar to copy while excluding git, node_modules, .env, dist, and root persistent data
+# NOTE: Specifically anchor './data' and './data/*' so nested source directories like 'src/data/'
+# (containing src/data/spriteData.ts) are strictly preserved and never omitted.
 (
     cd "${SOURCE_DIR}"
     tar --exclude='.git' \
         --exclude='node_modules' \
-        --exclude='.env' \
+        --exclude='.env*' \
         --exclude='dist' \
-        --exclude='data' \
+        --exclude='./data' \
+        --exclude='./data/*' \
         -cf - . | (cd "${INSTALL_DIR}" && tar -xf -)
 )
 
@@ -507,8 +518,17 @@ EOF
     fi
 fi
 
-# Ensure data directory symlink or presence
+# Ensure persistent data directory presence and restore user data safely
 mkdir -p "${DATA_DIR}"
+if [[ -d "${BACKUP_DATA:-}" ]]; then
+    cp -rn "${BACKUP_DATA}/." "${DATA_DIR}/" 2>/dev/null || true
+    rm -rf "${BACKUP_DATA}"
+    log_success "Restored and preserved existing persistent user data."
+elif [[ -d "${SOURCE_DIR}/data" ]]; then
+    # Fresh install: seed initial template assets without clobbering
+    cp -rn "${SOURCE_DIR}/data/." "${DATA_DIR}/" 2>/dev/null || true
+    log_info "Initialized persistent data directory structure."
+fi
 
 # ------------------------------------------------------------------------------
 # 7. Port Conflict Detection & Safe Resolution
@@ -603,6 +623,53 @@ if [[ "${DEP_INSTALL_SUCCESS}" != "true" ]]; then
     exit 1
 fi
 log_success "Project dependencies installed successfully."
+
+# ------------------------------------------------------------------------------
+# 8.1. Pre-build Source Verification
+# ------------------------------------------------------------------------------
+verify_required_source_files() {
+    local target_dir="$1"
+    log_info "Validating required source files in ${target_dir}..."
+
+    local required_files=(
+        "src/App.tsx"
+        "src/main.tsx"
+        "src/index.css"
+        "src/data/spriteData.ts"
+        "src/types/sprites.ts"
+        "src/types/providers.ts"
+        "src/utils/AssetLibrary.ts"
+        "src/utils/imageProcessor.ts"
+        "server.ts"
+        "package.json"
+        "vite.config.ts"
+        "index.html"
+    )
+
+    local missing_files=()
+    for rel_path in "${required_files[@]}"; do
+        if [[ ! -f "${target_dir}/${rel_path}" ]]; then
+            missing_files+=("${rel_path}")
+        fi
+    done
+
+    if [[ "${#missing_files[@]}" -gt 0 ]]; then
+        log_error "Pre-build source verification failed! The following required files are missing from ${target_dir}:"
+        for missing in "${missing_files[@]}"; do
+            echo -e "  ${RED}✖ ${missing}${RESET}" >&2
+        done
+        echo "" >&2
+        log_error "Aborting build to prevent deployment failure. Check packaging exclusion rules."
+        return 1
+    fi
+
+    log_success "All required source files verified (including src/data/spriteData.ts)."
+    return 0
+}
+
+if ! verify_required_source_files "${INSTALL_DIR}"; then
+    exit 1
+fi
 
 log_info "Building frontend for production deployment..."
 BUILD_SUCCESS=false

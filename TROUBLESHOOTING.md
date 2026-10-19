@@ -211,3 +211,25 @@ The installer and uninstaller display a centered **DELAVAR STUDIO** ASCII banner
 - **Piped / CI / Log Redirects**: If `install.sh` or `uninstall.sh` is piped to a file or CI log (`sudo bash install.sh > install.log`), ANSI color codes are automatically stripped to keep the log file clean and readable.
 - **Dumb Terminals**: If `TERM=dumb`, color escapes are suppressed automatically.
 - **Non-Fatal**: Banner rendering errors never interrupt or abort installation or uninstallation routines.
+
+---
+
+## 9. Unresolved Import Build Error (`[UNRESOLVED_IMPORT] Could not resolve './data/spriteData' in src/App.tsx`)
+
+### Cause:
+Older installer revisions utilized a generic `--exclude='data'` parameter in the file deployment `tar` command. In GNU tar, unanchored exclusions match any directory or path segment named `data`, which unintentionally excluded the nested source directory `src/data/` (including `src/data/spriteData.ts`).
+
+### Permanent Fix:
+- **Anchored Packaging Exclusions**: `install.sh` and `update.sh` now use explicitly anchored exclusion patterns (`--exclude='./data'` and `--exclude='./data/*'`) targeting only the root-level persistent data directory. All source directories under `src/` are fully copied.
+- **Pre-Build Source File Verification**: Both `install.sh`, `update.sh`, and `package.json` now include an automated pre-flight integrity check (`npm run validate:sources`) that verifies all mandatory source files (including `src/data/spriteData.ts`) before compiling Vite assets.
+- **Zero Data Loss**: Existing configuration (`.env`) and persistent assets (`data/assets/`) are backed up and safely preserved with non-clobbering restoration (`cp -rn`).
+
+### Resolution:
+To apply the fix to an existing installation on your VPS:
+```bash
+# Pull the latest fix and rebuild:
+sprite-studio update
+# Or run from your cloned repository:
+git pull origin main
+sudo bash install.sh
+```

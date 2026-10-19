@@ -45,11 +45,13 @@ Upon launching, the installer displays the **DELAVAR STUDIO** terminal banner (i
    - Automatically uses or installs the high-performance **Bun runtime** using `bun.lock`.
    - Seamlessly falls back to **Node.js 20 LTS / 22** using `package-lock.json` if Bun is not available.
 6. **Reproducible Install**: Runs `bun install --frozen-lockfile` (or `npm ci` under Node.js) with aligned `esbuild@^0.28.0` and `vite@^8.3.0` to eliminate dependency conflicts.
-7. **Production Build**: Compiles Vite assets into `/opt/elysian-sprite-studio/dist` and verifies `index.html`.
-8. **Port Conflict Safeguard**: Checks if port 3000 is occupied; if an external process holds it, auto-assigns the next available port without terminating unrelated applications.
-9. **Least-Privilege Security User**: Creates a dedicated `spritestudio` system account without login privileges.
-10. **Systemd Daemon**: Configures, enables, and starts `sprite-studio.service` with automatic restarts and crash recovery.
-11. **Global Command**: Installs `/usr/local/bin/sprite-studio` for terminal control.
+7. **Safe Packaging & Data Preservation**: Copies all source files and nested source directories (including `src/data/spriteData.ts`) while anchoring runtime `./data/` exclusions to protect user assets and `.env` secrets from being overwritten or cleared.
+8. **Pre-Build Source Verification**: Automatically validates all critical tracked source files (`src/data/spriteData.ts`, `src/App.tsx`, `server.ts`, etc.) before building to guarantee zero missing imports.
+9. **Production Build**: Compiles Vite assets into `/opt/elysian-sprite-studio/dist` and verifies `index.html`.
+10. **Port Conflict Safeguard**: Checks if port 3000 is occupied; if an external process holds it, auto-assigns the next available port without terminating unrelated applications.
+11. **Least-Privilege Security User**: Creates a dedicated `spritestudio` system account without login privileges.
+12. **Systemd Daemon**: Configures, enables, and starts `sprite-studio.service` with automatic restarts and crash recovery.
+13. **Global Command**: Installs `/usr/local/bin/sprite-studio` for terminal control.
 
 ---
 
