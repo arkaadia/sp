@@ -204,7 +204,7 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
     // Environment specific
     biome: 'Forest',
     lighting: 'Daylight',
-    provider: 'openai'
+    provider: 'google-imagen'
   });
 
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
@@ -261,13 +261,22 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
     document.body.removeChild(a);
   };
 
-  // Collapsible AI Model & API Configuration state
+  // Collapsible AI Model & API Configuration state (Separate Google AI and OpenAI configurations)
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [apiConfig, setApiConfig] = useState({
     mode: 'builtin' as 'builtin' | 'custom',
-    baseUrl: '',
+    // Google AI Studio (Imagen 3) Configuration
+    googleApiKey: '',
+    googleEndpoint: 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict',
+    googleModel: 'imagen-3.0-generate-001',
+    // OpenAI (DALL-E) Configuration
+    openaiApiKey: '',
+    openaiBaseUrl: 'https://api.openai.com/v1',
+    openaiModel: 'dall-e-3',
+    // General / Active config fallbacks
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict',
     apiKey: '',
-    model: 'dall-e-3',
+    model: 'imagen-3.0-generate-001',
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
@@ -286,15 +295,19 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
   const handleTestConnection = async () => {
     setIsTestingConnection(true);
     setConnectionStatus({ type: null, message: null });
+    const isGoogle = promptData.provider === 'google-imagen' || promptData.provider === 'gemini';
+    const effectiveKey = (isGoogle ? apiConfig.googleApiKey : apiConfig.openaiApiKey) || apiConfig.apiKey;
+    const effectiveUrl = (isGoogle ? apiConfig.googleEndpoint : apiConfig.openaiBaseUrl) || apiConfig.baseUrl;
+
     try {
       const res = await fetch('/api/providers/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: promptData.provider,
-          mode: apiConfig.mode,
-          apiKey: apiConfig.mode === 'custom' ? apiConfig.apiKey : undefined,
-          baseUrl: apiConfig.mode === 'custom' ? apiConfig.baseUrl : undefined,
+          mode: isGoogle ? (effectiveKey ? 'custom' : 'builtin') : apiConfig.mode,
+          apiKey: effectiveKey?.trim() || undefined,
+          baseUrl: effectiveUrl?.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -318,15 +331,19 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
   const handleFetchModels = async () => {
     setIsFetchingModels(true);
     setFetchModelsStatus({ type: null, message: null });
+    const isGoogle = promptData.provider === 'google-imagen' || promptData.provider === 'gemini';
+    const effectiveKey = (isGoogle ? apiConfig.googleApiKey : apiConfig.openaiApiKey) || apiConfig.apiKey;
+    const effectiveUrl = (isGoogle ? apiConfig.googleEndpoint : apiConfig.openaiBaseUrl) || apiConfig.baseUrl;
+
     try {
       const res = await fetch('/api/providers/models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: promptData.provider,
-          mode: apiConfig.mode,
-          apiKey: apiConfig.mode === 'custom' ? apiConfig.apiKey : undefined,
-          baseUrl: apiConfig.mode === 'custom' ? apiConfig.baseUrl : undefined,
+          mode: isGoogle ? (effectiveKey ? 'custom' : 'builtin') : apiConfig.mode,
+          apiKey: effectiveKey?.trim() || undefined,
+          baseUrl: effectiveUrl?.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -339,8 +356,12 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
         type: 'success',
         message: `Successfully retrieved ${models.length} model${models.length === 1 ? '' : 's'}.`
       });
-      if (models.length > 0 && !apiConfig.model) {
-        setApiConfig(prev => ({ ...prev, model: models[0] }));
+      if (models.length > 0) {
+        if (isGoogle) {
+          setApiConfig(prev => ({ ...prev, googleModel: models[0], model: models[0] }));
+        } else {
+          setApiConfig(prev => ({ ...prev, openaiModel: models[0], model: models[0] }));
+        }
       }
     } catch (err: any) {
       setFetchModelsStatus({
@@ -358,19 +379,24 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
       // Determine category based on metadata if possible, otherwise default
       const prevCategory = initialAsset.generationSettings?.category || 'character';
       setCategory(prevCategory);
+      const isInitialGoogle = initialAsset.provider?.toLowerCase().includes('gemini') || initialAsset.provider?.toLowerCase().includes('google');
       setPromptData(prev => ({
         ...prev,
         description: initialAsset.prompt,
         name: initialAsset.name,
-        provider: initialAsset.provider?.toLowerCase().includes('gemini') ? 'gemini' : 'openai',
+        provider: isInitialGoogle ? 'google-imagen' : 'openai',
         ...initialAsset.generationSettings
       }));
 
       // If initial asset specifies model, preserve it; if generating variation with reference image, recommend dall-e-2 for OpenAI
       if (initialAsset.model) {
-        setApiConfig(prev => ({ ...prev, model: initialAsset.model }));
-      } else if (initialAsset.assetLocation) {
-        setApiConfig(prev => ({ ...prev, model: 'dall-e-2' }));
+        if (isInitialGoogle) {
+          setApiConfig(prev => ({ ...prev, googleModel: initialAsset.model, model: initialAsset.model }));
+        } else {
+          setApiConfig(prev => ({ ...prev, openaiModel: initialAsset.model, model: initialAsset.model }));
+        }
+      } else if (initialAsset.assetLocation && !isInitialGoogle) {
+        setApiConfig(prev => ({ ...prev, openaiModel: 'dall-e-2', model: 'dall-e-2' }));
       }
 
       if (initialAsset.assetLocation) {
@@ -414,7 +440,9 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
   };
 
   // Model capability resolver based on current provider and model
-  const currentCapability = getModelCapability(promptData.provider, apiConfig.model);
+  const isGoogleProvider = promptData.provider === 'google-imagen' || promptData.provider === 'gemini';
+  const effectiveActiveModel = isGoogleProvider ? apiConfig.googleModel : (apiConfig.mode === 'custom' ? apiConfig.model : apiConfig.openaiModel);
+  const currentCapability = getModelCapability(promptData.provider, effectiveActiveModel);
 
   const buildPrompt = () => {
     const parts = [];
@@ -520,13 +548,18 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
         formData.append('originalId', initialAsset.id);
       }
 
-      // Pass custom AI model and API configuration securely to backend proxy
-      if (apiConfig.mode === 'custom' || apiConfig.model) {
+      // Pass AI model and API configuration securely to backend proxy
+      const isGoogle = promptData.provider === 'google-imagen' || promptData.provider === 'gemini';
+      const effectiveKey = (isGoogle ? apiConfig.googleApiKey : apiConfig.openaiApiKey) || apiConfig.apiKey;
+      const effectiveUrl = (isGoogle ? apiConfig.googleEndpoint : apiConfig.openaiBaseUrl) || apiConfig.baseUrl;
+      const effectiveModelToSend = isGoogle ? (apiConfig.googleModel || 'imagen-3.0-generate-001') : (apiConfig.model || apiConfig.openaiModel);
+
+      if (apiConfig.mode === 'custom' || effectiveModelToSend || effectiveKey || effectiveUrl) {
         formData.append('customConfig', JSON.stringify({
-          mode: apiConfig.mode,
-          baseUrl: apiConfig.baseUrl?.trim() || undefined,
-          apiKey: apiConfig.mode === 'custom' ? apiConfig.apiKey?.trim() || undefined : undefined,
-          model: apiConfig.model?.trim() || undefined,
+          mode: isGoogle ? (effectiveKey ? 'custom' : 'builtin') : apiConfig.mode,
+          baseUrl: effectiveUrl?.trim() || undefined,
+          apiKey: effectiveKey?.trim() || undefined,
+          model: effectiveModelToSend?.trim() || undefined,
         }));
       }
 
@@ -858,7 +891,22 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
                     const newProviderId = e.target.value;
                     const p = AVAILABLE_PROVIDERS.find(item => item.id === newProviderId);
                     setPromptData(prev => ({ ...prev, provider: newProviderId }));
-                    if (p) {
+                    if (newProviderId === 'google-imagen' || newProviderId === 'gemini') {
+                      const defaultEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict';
+                      setApiConfig(prev => ({
+                        ...prev,
+                        model: prev.googleModel || 'imagen-3.0-generate-001',
+                        baseUrl: prev.googleEndpoint || defaultEndpoint,
+                        apiKey: prev.googleApiKey || prev.apiKey,
+                      }));
+                    } else if (newProviderId === 'openai') {
+                      setApiConfig(prev => ({
+                        ...prev,
+                        model: prev.openaiModel || 'dall-e-3',
+                        baseUrl: prev.openaiBaseUrl || 'https://api.openai.com/v1',
+                        apiKey: prev.openaiApiKey || prev.apiKey,
+                      }));
+                    } else if (p) {
                       setApiConfig(prev => ({ ...prev, model: p.defaultModel }));
                     }
                     setConnectionStatus({ type: null, message: null });
@@ -886,11 +934,15 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
                   <Settings2 className="w-4 h-4 text-amber-400" />
                   <span className="text-xs font-semibold text-slate-200">AI Model & API Configuration</span>
                   <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-medium ${
-                    apiConfig.mode === 'custom' 
-                      ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30' 
-                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    (promptData.provider === 'google-imagen' || promptData.provider === 'gemini')
+                      ? (apiConfig.googleApiKey ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30' : 'bg-blue-500/10 text-blue-300 border border-blue-500/30')
+                      : (apiConfig.mode === 'custom' 
+                          ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30' 
+                          : 'bg-slate-800 text-slate-400 border border-slate-700')
                   }`}>
-                    {apiConfig.mode === 'custom' ? 'Custom API' : 'Built-in'}
+                    {(promptData.provider === 'google-imagen' || promptData.provider === 'gemini')
+                      ? (apiConfig.googleApiKey ? 'Custom Google Key' : 'Google AI (Imagen 3)')
+                      : (apiConfig.mode === 'custom' ? 'Custom API' : 'Built-in')}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
@@ -910,204 +962,385 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
 
               {isConfigOpen && (
                 <div className="p-4 pt-2 space-y-4 border-t border-slate-800/80 bg-[#0b0d12]">
-                  {/* Provider Mode: Built-in / Custom API */}
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1.5">Provider Mode</label>
-                    <div className="grid grid-cols-2 gap-2 bg-[#141820] p-1 rounded-lg border border-slate-800">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setApiConfig(prev => ({ ...prev, mode: 'builtin' }));
-                          setConnectionStatus({ type: null, message: null });
-                          setFetchModelsStatus({ type: null, message: null });
-                        }}
-                        className={`text-xs py-1.5 px-3 rounded-md font-medium transition-all cursor-pointer ${
-                          apiConfig.mode === 'builtin'
-                            ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Built-in (Server)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setApiConfig(prev => ({ ...prev, mode: 'custom' }));
-                          setConnectionStatus({ type: null, message: null });
-                          setFetchModelsStatus({ type: null, message: null });
-                        }}
-                        className={`text-xs py-1.5 px-3 rounded-md font-medium transition-all cursor-pointer ${
-                          apiConfig.mode === 'custom'
-                            ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Custom API
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1.5">
-                      {apiConfig.mode === 'builtin'
-                        ? 'Uses pre-configured server environment variables (OPENAI_API_KEY).'
-                        : 'Connect to your own OpenAI-compatible endpoint or custom model.'}
-                    </p>
-                  </div>
-
-                  {/* API Base URL */}
-                  {apiConfig.mode === 'custom' && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
-                          <Globe className="w-3 h-3 text-slate-400" />
-                          API Base URL
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setApiConfig(prev => ({ ...prev, baseUrl: 'https://api.openai.com/v1' }))}
-                          className="text-[10px] text-amber-400/80 hover:text-amber-300 underline cursor-pointer"
-                        >
-                          Reset to OpenAI default
-                        </button>
+                  {/* Separate Google AI Studio Configuration */}
+                  {(promptData.provider === 'google-imagen' || promptData.provider === 'gemini') ? (
+                    <div className="space-y-3.5">
+                      {/* Google AI Studio API Key input */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
+                            <Key className="w-3.5 h-3.5 text-amber-400" />
+                            Google AI Studio API Key
+                          </label>
+                          <a
+                            href="https://aistudio.google.com/app/apikey"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-amber-400 hover:text-amber-300 underline"
+                          >
+                            Get Key ↗
+                          </a>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showApiKey ? 'text' : 'password'}
+                            value={apiConfig.googleApiKey}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setApiConfig(prev => ({ ...prev, googleApiKey: val, apiKey: val }));
+                              setConnectionStatus({ type: null, message: null });
+                            }}
+                            className="w-full bg-[#141820] border border-slate-700/60 rounded-md pl-3 pr-10 py-1.5 text-xs text-white focus:border-amber-500/50 focus:outline-none font-mono"
+                            placeholder="AIzaSy... (leave blank to use server GEMINI_API_KEY)"
+                            autoComplete="off"
+                            spellCheck="false"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                            title={showApiKey ? 'Hide API key' : 'Show API key'}
+                          >
+                            {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3 text-emerald-500/70 shrink-0" />
+                          Passed securely via the 'x-goog-api-key' header. Never logged or exposed.
+                        </p>
                       </div>
-                      <input
-                        type="text"
-                        value={apiConfig.baseUrl}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setApiConfig(prev => ({ ...prev, baseUrl: val }));
-                          setConnectionStatus({ type: null, message: null });
-                        }}
-                        className="w-full bg-[#141820] border border-slate-700/60 rounded-md px-3 py-1.5 text-xs text-white focus:border-amber-500/50 focus:outline-none font-mono"
-                        placeholder="https://api.openai.com/v1"
-                      />
-                      <p className="text-[10px] text-slate-500 mt-1">
-                        Supports OpenAI, Groq, OpenRouter, Ollama, or custom OpenAI-compatible gateways.
-                      </p>
-                    </div>
-                  )}
 
-                  {/* API Key (masked input with show/hide) */}
-                  {apiConfig.mode === 'custom' && (
-                    <div>
-                      <label className="text-[11px] font-medium text-slate-400 mb-1 flex items-center gap-1">
-                        <Key className="w-3 h-3 text-slate-400" />
-                        API Key
-                      </label>
-                      <div className="relative">
+                      {/* Google Native REST API Endpoint */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-amber-400" />
+                            Google Native REST API Endpoint
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const defaultUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.googleModel || 'imagen-3.0-generate-001'}:predict`;
+                              setApiConfig(prev => ({
+                                ...prev,
+                                googleEndpoint: defaultUrl,
+                                baseUrl: defaultUrl,
+                              }));
+                            }}
+                            className="text-[10px] text-amber-400/80 hover:text-amber-300 underline cursor-pointer"
+                          >
+                            Reset to default
+                          </button>
+                        </div>
                         <input
-                          type={showApiKey ? 'text' : 'password'}
-                          value={apiConfig.apiKey}
+                          type="text"
+                          value={apiConfig.googleEndpoint}
                           onChange={(e) => {
                             const val = e.target.value;
-                            setApiConfig(prev => ({ ...prev, apiKey: val }));
+                            setApiConfig(prev => ({ ...prev, googleEndpoint: val, baseUrl: val }));
                             setConnectionStatus({ type: null, message: null });
                           }}
-                          className="w-full bg-[#141820] border border-slate-700/60 rounded-md pl-3 pr-10 py-1.5 text-xs text-white focus:border-amber-500/50 focus:outline-none font-mono"
-                          placeholder="sk-..."
-                          autoComplete="off"
-                          spellCheck="false"
+                          className="w-full bg-[#141820] border border-slate-700/60 rounded-md px-3 py-1.5 text-xs text-white focus:border-amber-500/50 focus:outline-none font-mono"
+                          placeholder="https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict"
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowApiKey(!showApiKey)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
-                          title={showApiKey ? 'Hide API key' : 'Show API key'}
-                        >
-                          {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Google's native REST API endpoint for image generation (predict schema).
+                        </p>
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3 text-emerald-500/70 shrink-0" />
-                        Never stored in browser storage. Transmitted securely to server proxy.
-                      </p>
+
+                      {/* Imagen 3 Model Selection */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
+                            <Cpu className="w-3.5 h-3.5 text-amber-400" />
+                            Imagen 3 Model
+                          </label>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Selected: <strong className="text-amber-300">{apiConfig.googleModel}</strong>
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const target = 'imagen-3.0-generate-001';
+                              const url = `https://generativelanguage.googleapis.com/v1beta/models/${target}:predict`;
+                              setApiConfig(prev => ({
+                                ...prev,
+                                googleModel: target,
+                                model: target,
+                                googleEndpoint: url,
+                                baseUrl: url,
+                              }));
+                            }}
+                            className={`px-2.5 py-1.5 rounded border text-xs font-mono transition-all text-left cursor-pointer ${
+                              apiConfig.googleModel === 'imagen-3.0-generate-001'
+                                ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
+                                : 'bg-[#141820] border-slate-800 text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <div className="text-[11px] font-sans font-medium text-slate-200">Imagen 3 (v001)</div>
+                            <div className="text-[9px] text-slate-500">imagen-3.0-generate-001</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const target = 'imagen-3.0-generate-002';
+                              const url = `https://generativelanguage.googleapis.com/v1beta/models/${target}:predict`;
+                              setApiConfig(prev => ({
+                                ...prev,
+                                googleModel: target,
+                                model: target,
+                                googleEndpoint: url,
+                                baseUrl: url,
+                              }));
+                            }}
+                            className={`px-2.5 py-1.5 rounded border text-xs font-mono transition-all text-left cursor-pointer ${
+                              apiConfig.googleModel === 'imagen-3.0-generate-002'
+                                ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
+                                : 'bg-[#141820] border-slate-800 text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <div className="text-[11px] font-sans font-medium text-slate-200">Imagen 3 (v002)</div>
+                            <div className="text-[9px] text-slate-500">imagen-3.0-generate-002</div>
+                          </button>
+                        </div>
+
+                        {fetchedModels.length > 0 && (
+                          <div className="mt-2">
+                            <label className="block text-[10px] text-slate-400 mb-1">
+                              Or select from discovered models ({fetchedModels.length} available):
+                            </label>
+                            <select
+                              value={fetchedModels.includes(apiConfig.googleModel) ? apiConfig.googleModel : ''}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  const target = e.target.value;
+                                  const url = `https://generativelanguage.googleapis.com/v1beta/models/${target}:predict`;
+                                  setApiConfig(prev => ({
+                                    ...prev,
+                                    googleModel: target,
+                                    model: target,
+                                    googleEndpoint: url,
+                                    baseUrl: url,
+                                  }));
+                                }
+                              }}
+                              className="w-full bg-[#141820] border border-slate-700/60 rounded-md px-2 py-1 text-xs text-slate-200 focus:border-amber-500/50 focus:outline-none font-mono"
+                            >
+                              <option value="">-- Choose discovered model --</option>
+                              {fetchedModels.map((m) => (
+                                <option key={m} value={m}>
+                                  {m}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* OpenAI Configuration */
+                    <div className="space-y-3.5">
+                      {/* Provider Mode: Built-in / Custom API */}
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-400 mb-1.5">OpenAI Provider Mode</label>
+                        <div className="grid grid-cols-2 gap-2 bg-[#141820] p-1 rounded-lg border border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setApiConfig(prev => ({ ...prev, mode: 'builtin' }));
+                              setConnectionStatus({ type: null, message: null });
+                              setFetchModelsStatus({ type: null, message: null });
+                            }}
+                            className={`text-xs py-1.5 px-3 rounded-md font-medium transition-all cursor-pointer ${
+                              apiConfig.mode === 'builtin'
+                                ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            Built-in (Server)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setApiConfig(prev => ({ ...prev, mode: 'custom' }));
+                              setConnectionStatus({ type: null, message: null });
+                              setFetchModelsStatus({ type: null, message: null });
+                            }}
+                            className={`text-xs py-1.5 px-3 rounded-md font-medium transition-all cursor-pointer ${
+                              apiConfig.mode === 'custom'
+                                ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            Custom API
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1.5">
+                          {apiConfig.mode === 'builtin'
+                            ? 'Uses pre-configured server environment variables (OPENAI_API_KEY).'
+                            : 'Connect to your own OpenAI-compatible endpoint or custom model.'}
+                        </p>
+                      </div>
+
+                      {/* OpenAI API Base URL */}
+                      {apiConfig.mode === 'custom' && (
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
+                              <Globe className="w-3 h-3 text-slate-400" />
+                              API Base URL
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setApiConfig(prev => ({ ...prev, openaiBaseUrl: 'https://api.openai.com/v1', baseUrl: 'https://api.openai.com/v1' }))}
+                              className="text-[10px] text-amber-400/80 hover:text-amber-300 underline cursor-pointer"
+                            >
+                              Reset to OpenAI default
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={apiConfig.openaiBaseUrl}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setApiConfig(prev => ({ ...prev, openaiBaseUrl: val, baseUrl: val }));
+                              setConnectionStatus({ type: null, message: null });
+                            }}
+                            className="w-full bg-[#141820] border border-slate-700/60 rounded-md px-3 py-1.5 text-xs text-white focus:border-amber-500/50 focus:outline-none font-mono"
+                            placeholder="https://api.openai.com/v1"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            Supports OpenAI, Groq, OpenRouter, Ollama, or custom OpenAI-compatible gateways.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* OpenAI API Key */}
+                      {apiConfig.mode === 'custom' && (
+                        <div>
+                          <label className="text-[11px] font-medium text-slate-400 mb-1 flex items-center gap-1">
+                            <Key className="w-3 h-3 text-slate-400" />
+                            OpenAI API Key
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showApiKey ? 'text' : 'password'}
+                              value={apiConfig.openaiApiKey}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setApiConfig(prev => ({ ...prev, openaiApiKey: val, apiKey: val }));
+                                setConnectionStatus({ type: null, message: null });
+                              }}
+                              className="w-full bg-[#141820] border border-slate-700/60 rounded-md pl-3 pr-10 py-1.5 text-xs text-white focus:border-amber-500/50 focus:outline-none font-mono"
+                              placeholder="sk-..."
+                              autoComplete="off"
+                              spellCheck="false"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowApiKey(!showApiKey)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                              title={showApiKey ? 'Hide API key' : 'Show API key'}
+                            >
+                              {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-emerald-500/70 shrink-0" />
+                            Never stored in browser storage. Transmitted securely to server proxy.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* OpenAI Model ID */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
+                            <Cpu className="w-3 h-3 text-slate-400" />
+                            Model ID
+                          </label>
+                          {apiConfig.openaiModel && (
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Selected: <strong className="text-amber-300">{apiConfig.openaiModel}</strong>
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={apiConfig.openaiModel}
+                          onChange={(e) => setApiConfig(prev => ({ ...prev, openaiModel: e.target.value, model: e.target.value }))}
+                          className="w-full bg-[#141820] border border-slate-700/60 rounded-md px-3 py-1.5 text-xs text-white focus:border-amber-500/50 focus:outline-none font-mono"
+                          placeholder="e.g. dall-e-3, dall-e-2, or custom-model"
+                        />
+
+                        {fetchedModels.length > 0 && (
+                          <div className="mt-2">
+                            <label className="block text-[10px] text-slate-400 mb-1">
+                              Or select from fetched models ({fetchedModels.length} available):
+                            </label>
+                            <select
+                              value={fetchedModels.includes(apiConfig.openaiModel) ? apiConfig.openaiModel : ''}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  setApiConfig(prev => ({ ...prev, openaiModel: e.target.value, model: e.target.value }));
+                                }
+                              }}
+                              className="w-full bg-[#141820] border border-slate-700/60 rounded-md px-2 py-1 text-xs text-slate-200 focus:border-amber-500/50 focus:outline-none font-mono"
+                            >
+                              <option value="">-- Choose a fetched model --</option>
+                              {fetchedModels.map((m) => (
+                                <option key={m} value={m}>
+                                  {m}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {/* Model ID (manual entry) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
-                        <Cpu className="w-3 h-3 text-slate-400" />
-                        Model ID (Manual Entry)
-                      </label>
-                      {apiConfig.model && (
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          Selected: <strong className="text-amber-300">{apiConfig.model}</strong>
-                        </span>
-                      )}
+                  {/* Capability Badges and description */}
+                  <div className="mt-2 p-2.5 rounded-lg bg-[#141820] border border-slate-800 text-[11px] space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
+                        currentCapability.supportsTextToImage
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                      }`}>
+                        {currentCapability.supportsTextToImage ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            Text-to-Image Supported
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-3 h-3 text-red-400" />
+                            No Image Generation
+                          </>
+                        )}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
+                        currentCapability.supportsImageEditing
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {currentCapability.supportsImageEditing ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            Reference Editing / Variations
+                          </>
+                        ) : (
+                          <>
+                            <Info className="w-3 h-3 text-amber-400" />
+                            Text Prompt Only (No Variations)
+                          </>
+                        )}
+                      </span>
                     </div>
-                    <input
-                      type="text"
-                      value={apiConfig.model}
-                      onChange={(e) => setApiConfig(prev => ({ ...prev, model: e.target.value }))}
-                      className="w-full bg-[#141820] border border-slate-700/60 rounded-md px-3 py-1.5 text-xs text-white focus:border-amber-500/50 focus:outline-none font-mono"
-                      placeholder="e.g. dall-e-3, dall-e-2, or custom-model"
-                    />
-
-                    {/* Fetched Models Picker */}
-                    {fetchedModels.length > 0 && (
-                      <div className="mt-2">
-                        <label className="block text-[10px] text-slate-400 mb-1">
-                          Or select from fetched models ({fetchedModels.length} available):
-                        </label>
-                        <select
-                          value={fetchedModels.includes(apiConfig.model) ? apiConfig.model : ''}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              setApiConfig(prev => ({ ...prev, model: e.target.value }));
-                            }
-                          }}
-                          className="w-full bg-[#141820] border border-slate-700/60 rounded-md px-2 py-1 text-xs text-slate-200 focus:border-amber-500/50 focus:outline-none font-mono"
-                        >
-                          <option value="">-- Choose a fetched model --</option>
-                          {fetchedModels.map((m) => (
-                            <option key={m} value={m}>
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Capability Badges and description */}
-                    <div className="mt-2 p-2.5 rounded-lg bg-[#141820] border border-slate-800 text-[11px] space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          currentCapability.supportsTextToImage
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-red-500/15 text-red-300 border border-red-500/30'
-                        }`}>
-                          {currentCapability.supportsTextToImage ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              Text-to-Image Supported
-                            </>
-                          ) : (
-                            <>
-                              <X className="w-3 h-3 text-red-400" />
-                              No Image Generation
-                            </>
-                          )}
-                        </span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          currentCapability.supportsImageEditing
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                        }`}>
-                          {currentCapability.supportsImageEditing ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              Reference Editing / Variations
-                            </>
-                          ) : (
-                            <>
-                              <Info className="w-3 h-3 text-amber-400" />
-                              Text Prompt Only (No Variations)
-                            </>
-                          )}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">{currentCapability.description}</p>
-                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">{currentCapability.description}</p>
                   </div>
 
                   {/* Action Buttons: Test Connection & Fetch Models */}
@@ -1115,7 +1348,7 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
                     <button
                       type="button"
                       onClick={handleTestConnection}
-                      disabled={isTestingConnection || (apiConfig.mode === 'custom' && !apiConfig.apiKey && !apiConfig.baseUrl)}
+                      disabled={isTestingConnection}
                       className="flex-1 min-w-[120px] bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-200 text-xs py-2 px-3 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       {isTestingConnection ? (
@@ -1134,7 +1367,7 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
                     <button
                       type="button"
                       onClick={handleFetchModels}
-                      disabled={isFetchingModels || (apiConfig.mode === 'custom' && !apiConfig.apiKey && !apiConfig.baseUrl)}
+                      disabled={isFetchingModels}
                       className="flex-1 min-w-[120px] bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-200 text-xs py-2 px-3 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       {isFetchingModels ? (
