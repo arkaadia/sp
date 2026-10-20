@@ -2,8 +2,8 @@ import React from 'react';
 import { Download } from 'lucide-react';
 
 interface TopBarProps {
-  activeTab: 'studio' | 'motion' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github';
-  setActiveTab: (tab: 'studio' | 'motion' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github') => void;
+  activeTab: 'studio' | 'retargeting' | 'motion' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github';
+  setActiveTab: (tab: 'studio' | 'retargeting' | 'motion' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github') => void;
   onOpenExport: () => void;
 }
 
@@ -32,6 +32,17 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTab, setActiveTab, onOpenE
           }`}
         >
           Studio Player
+        </button>
+        <button
+          onClick={() => setActiveTab('retargeting')}
+          className={`hover:text-white transition-colors whitespace-nowrap shrink-0 pb-0.5 flex items-center gap-1.5 ${
+            activeTab === 'retargeting' ? 'text-amber-400 border-b-2 border-amber-400 font-semibold' : ''
+          }`}
+        >
+          <span>Motion Retargeting</span>
+          <span className="bg-amber-400/20 text-amber-300 text-[10px] font-mono px-1.5 py-0.2 rounded-full border border-amber-400/30">
+            10F
+          </span>
         </button>
         <button
           onClick={() => setActiveTab('motion')}

@@ -58,6 +58,7 @@ interface MotionLibraryViewProps {
   onApplyRetargetedAction: (actionKey: string, actionDef: AnimationAction) => void;
   onSendToSlicer: (imageUrl: string) => void;
   onNavigateToStudio: () => void;
+  onNavigateToRetargeting?: () => void;
   removeBg: boolean;
   bgTolerance: number;
   bgSmoothness: number;
@@ -92,6 +93,7 @@ export const MotionLibraryView: React.FC<MotionLibraryViewProps> = ({
   onApplyRetargetedAction,
   onSendToSlicer,
   onNavigateToStudio,
+  onNavigateToRetargeting,
   removeBg,
   bgTolerance,
   bgSmoothness,
@@ -708,14 +710,26 @@ export const MotionLibraryView: React.FC<MotionLibraryViewProps> = ({
           </p>
         </div>
 
-        {/* PROMINENT UPLOADER BUTTON */}
-        <button
-          onClick={handleOpenNewModal}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg hover:shadow-amber-500/20 active:scale-[0.98] transition-all whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4 stroke-[3]" />
-          <span>Add Custom Motion Template</span>
-        </button>
+        {/* HEADER ACTIONS */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {onNavigateToRetargeting && (
+            <button
+              onClick={onNavigateToRetargeting}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg hover:shadow-amber-500/20 active:scale-[0.98] transition-all whitespace-nowrap"
+            >
+              <Zap className="w-4 h-4 fill-current" />
+              <span>Launch Motion Retargeting (10F)</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleOpenNewModal}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg border border-slate-700 active:scale-[0.98] transition-all whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Add Custom Template</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. Gallery UI: Collapsible Sections */}
