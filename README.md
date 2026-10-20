@@ -21,7 +21,7 @@ cd sp
 sudo bash install.sh
 ```
 
-After installation finishes, access the application in your browser at **`http://127.0.0.1:3000`**.
+After installation finishes, access the application in your browser at **`http://0.0.0.0:3000`** (or `http://YOUR_SERVER_IP:3000`).
 
 ### Service Management & Helper Scripts
 ```bash

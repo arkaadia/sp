@@ -45,7 +45,7 @@ const upload = multer({
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = "0.0.0.0";
 
 app.use(express.json({ limit: '15mb' }));
 app.use('/api/assets/images', express.static(path.join(__dirname, 'data/assets')));
@@ -469,7 +469,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        host: HOST,
+        host: "0.0.0.0",
         port: PORT,
       },
       appType: 'spa',
@@ -486,8 +486,8 @@ async function startServer() {
     });
   }
 
-  const server = app.listen(PORT, HOST, () => {
-    console.log(`Elysian Sprite Studio running at http://${HOST}:${PORT}`);
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Elysian Sprite Studio running at http://0.0.0.0:${PORT}`);
   });
 
   // Graceful shutdown

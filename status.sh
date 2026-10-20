@@ -27,10 +27,10 @@ fi
 
 # 2. Port and Configuration
 PORT=3000
-HOST="127.0.0.1"
+HOST="0.0.0.0"
 if [[ -f "${APP_DIR}/.env" ]]; then
     PORT=$(grep -E '^PORT=' "${APP_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "3000")
-    HOST=$(grep -E '^HOST=' "${APP_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "127.0.0.1")
+    HOST=$(grep -E '^HOST=' "${APP_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "0.0.0.0")
 fi
 
 echo "Configured Host: ${HOST}"
