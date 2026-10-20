@@ -144,10 +144,10 @@ export const ProxySettingsModal: React.FC<ProxySettingsModalProps> = ({
 
       const data: ProxyTestResult = await response.json();
       setTestResult(data);
-    } catch (err: any) {
+    } catch {
       setTestResult({
         success: false,
-        message: `Network error while contacting server test endpoint: ${err.message}`,
+        message: '❌ Proxy Connection Failed. Please check your credentials or proxy server status.',
       });
     } finally {
       setIsTesting(false);
@@ -528,58 +528,78 @@ export const ProxySettingsModal: React.FC<ProxySettingsModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-slate-800/80 bg-[#121620] flex items-center justify-between gap-3">
-          {/* Test Connection Button */}
-          <button
-            type="button"
-            onClick={handleTestConnection}
-            disabled={isTesting || isSaving}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-          >
-            {isTesting ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                <span>Testing Route...</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>Test Connection</span>
-              </>
-            )}
-          </button>
-
-          <div className="flex items-center gap-2.5">
-            {/* Cancel Button */}
+        <div className="px-6 py-4 border-t border-slate-800/80 bg-[#121620] flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            {/* Test Connection Button */}
             <button
               type="button"
-              onClick={onClose}
-              disabled={isSaving}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              onClick={handleTestConnection}
+              disabled={isTesting || isSaving}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm cursor-pointer"
             >
-              Cancel
-            </button>
-
-            {/* Save Button */}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || isTesting}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md shadow-amber-400/20 hover:shadow-amber-400/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
+              {isTesting ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Saving...</span>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                  <span>Testing Route...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Save Proxy</span>
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Test Connection</span>
                 </>
               )}
             </button>
+
+            <div className="flex items-center gap-2.5">
+              {/* Cancel Button */}
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              {/* Save Button */}
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving || isTesting}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md shadow-amber-400/20 hover:shadow-amber-400/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Save Proxy</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* Test Connection Notification below the buttons */}
+          {testResult && (
+            <div
+              className={`text-xs px-3.5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all ${
+                testResult.success
+                  ? 'text-emerald-300 bg-emerald-950/40 border border-emerald-500/30'
+                  : 'text-rose-300 bg-rose-950/40 border border-rose-500/30'
+              }`}
+            >
+              <span>
+                {testResult.success
+                  ? `✅ Connection Successful! Server traffic is routed through IP: ${testResult.ip || 'Unknown'}`
+                  : `❌ Proxy Connection Failed. Please check your credentials or proxy server status.`
+                }
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
