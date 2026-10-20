@@ -18,11 +18,12 @@ import { AssetStudio } from './components/AssetStudio';
 import { AssetLibraryView } from './components/AssetLibraryView';
 import { PhysicsHitboxEditor } from './components/PhysicsHitboxEditor';
 import { EnvironmentParallaxView } from './components/EnvironmentParallaxView';
+import { MotionLibraryView } from './components/MotionLibraryView';
 
 export default function App() {
   const [selectedAssetForVariation, setSelectedAssetForVariation] = useState<any>(null);
   const [slicerInitialImage, setSlicerInitialImage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'studio' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github'>('studio');
+  const [activeTab, setActiveTab] = useState<'studio' | 'motion' | 'slicer' | 'inspector' | 'tileset' | 'physics' | 'hitbox' | 'parallax' | 'generator' | 'library' | 'github'>('studio');
   const [packList, setPackList] = useState<CharacterPack[]>(CHARACTER_PACKS);
   const [currentPackIndex, setCurrentPackIndex] = useState<number>(0);
   const [selectedAction, setSelectedAction] = useState<SpriteAction>('idle');
@@ -38,6 +39,24 @@ export default function App() {
     setPackList((prev) => [newPack, ...prev]);
     setCurrentPackIndex(0);
     setActiveTab('studio');
+  };
+
+  const handleApplyRetargetedAction = (actionKey: string, actionDef: any) => {
+    setPackList((prevPacks) => {
+      const updated = [...prevPacks];
+      const target = updated[currentPackIndex] || updated[0];
+      if (target) {
+        updated[currentPackIndex] = {
+          ...target,
+          actions: {
+            ...target.actions,
+            [actionKey]: actionDef,
+          },
+        };
+      }
+      return updated;
+    });
+    setSelectedAction(actionKey as SpriteAction);
   };
 
   const currentPack: CharacterPack = packList[currentPackIndex] || packList[0];
@@ -108,6 +127,24 @@ export default function App() {
             bgSmoothness={bgSmoothness}
             setBgSmoothness={setBgSmoothness}
             onOpenExport={() => setIsExportModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'motion' && (
+          <MotionLibraryView
+            currentPack={currentPack}
+            packList={packList}
+            onApplyRetargetedAction={handleApplyRetargetedAction}
+            onSendToSlicer={(url) => {
+              setSlicerInitialImage(url);
+              setActiveTab('slicer');
+            }}
+            onNavigateToStudio={() => {
+              setActiveTab('studio');
+            }}
+            removeBg={removeBg}
+            bgTolerance={bgTolerance}
+            bgSmoothness={bgSmoothness}
           />
         )}
 

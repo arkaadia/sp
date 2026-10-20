@@ -1,4 +1,4 @@
-export type SpriteAction = 'idle' | 'run' | 'jump' | 'attack' | 'climb' | 'defense';
+export type SpriteAction = 'idle' | 'run' | 'jump' | 'attack' | 'climb' | 'defense' | string;
 
 export interface FrameDefinition {
   id: string;
@@ -29,12 +29,49 @@ export interface AnimationAction {
   description: string;
 }
 
+export interface MotionTemplate {
+  id: string;
+  name: string;
+  category: 'default' | 'custom';
+  description?: string;
+  sheetUrl: string;
+  cols: number; // Number of Columns (X)
+  rows: number; // Number of Rows (Y)
+  totalFrames: number; // Total Frames
+  frameWidth?: number;
+  frameHeight?: number;
+  fps?: number;
+  loop?: boolean;
+  phaseLabels?: string[];
+  createdAt?: string;
+  tags?: string[];
+  sourceAction?: string;
+}
+
+export interface RetargetingResult {
+  templateId: string;
+  templateName: string;
+  targetCharacterId: string;
+  targetCharacterName: string;
+  sheetDataUrl: string;
+  cols: number;
+  rows: number;
+  totalFrames: number;
+  cellWidth: number;
+  cellHeight: number;
+  totalWidth: number;
+  totalHeight: number;
+  frames: FrameDefinition[];
+  actionDef: AnimationAction;
+  createdAt: string;
+}
+
 export interface CharacterPack {
   id: string;
   name: string;
   shortDesc: string;
   avatarUrl: string;
-  actions: Record<SpriteAction, AnimationAction>;
+  actions: Record<string, AnimationAction>;
 }
 
 export interface ExportSettings {

@@ -53,16 +53,19 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
   const ghostCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationTimerRef = useRef<number | null>(null);
 
-  const activeActionDef = currentPack.actions[selectedAction];
-  const frames = activeActionDef.frames.slice(0, 8);
+  const activeActionDef = currentPack.actions[selectedAction] || Object.values(currentPack.actions)[0];
+  const frames = activeActionDef?.frames && activeActionDef.frames.length > 0 ? activeActionDef.frames : [];
+  const totalFramesCount = Math.max(1, frames.length);
   const currentFrame = frames[currentFrameIdx] || frames[0];
-  const prevFrameIdx = (currentFrameIdx - 1 + 8) % 8;
+  const prevFrameIdx = (currentFrameIdx - 1 + totalFramesCount) % totalFramesCount;
   const prevFrame = frames[prevFrameIdx];
 
   // Sync FPS when switching action
   useEffect(() => {
-    setFps(activeActionDef.fps);
-    setCurrentFrameIdx(0);
+    if (activeActionDef) {
+      setFps(activeActionDef.fps || 10);
+      setCurrentFrameIdx(0);
+    }
   }, [selectedAction, currentPack]);
 
   // Main animation playback loop
@@ -76,26 +79,26 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
     animationTimerRef.current = window.setInterval(() => {
       setCurrentFrameIdx((prev) => {
         if (loopMode === 'loop') {
-          return (prev + 1) % 8;
+          return (prev + 1) % totalFramesCount;
         } else if (loopMode === 'pingpong') {
           if (pingPongForward) {
-            if (prev >= 7) {
+            if (prev >= totalFramesCount - 1) {
               setPingPongForward(false);
-              return 6;
+              return Math.max(0, totalFramesCount - 2);
             }
             return prev + 1;
           } else {
             if (prev <= 0) {
               setPingPongForward(true);
-              return 1;
+              return Math.min(1, totalFramesCount - 1);
             }
             return prev - 1;
           }
         } else {
           // once
-          if (prev >= 7) {
+          if (prev >= totalFramesCount - 1) {
             setIsPlaying(false);
-            return 7;
+            return totalFramesCount - 1;
           }
           return prev + 1;
         }
@@ -105,7 +108,7 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
     return () => {
       if (animationTimerRef.current) clearInterval(animationTimerRef.current);
     };
-  }, [isPlaying, fps, loopMode, pingPongForward]);
+  }, [isPlaying, fps, loopMode, pingPongForward, totalFramesCount]);
 
   // Render current frame to canvas
   useEffect(() => {
@@ -218,21 +221,21 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
 
         {/* Action Tabs Segmented Control */}
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-900/90 rounded-lg border border-slate-800">
-          {(['idle', 'run', 'jump', 'attack', 'climb', 'defense'] as SpriteAction[]).map((act) => {
+          {Object.keys(currentPack.actions).map((act) => {
             const isActive = selectedAction === act;
             const def = currentPack.actions[act];
             if (!def) return null;
             return (
               <button
                 key={act}
-                onClick={() => setSelectedAction(act)}
+                onClick={() => setSelectedAction(act as SpriteAction)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap capitalize ${
                   isActive
                     ? 'bg-amber-400 text-slate-950 shadow-md font-bold'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                 }`}
               >
-                {act} ({def.totalFrames})
+                {def.title || act} ({def.totalFrames || def.frames?.length || 8})
               </button>
             );
           })}
@@ -254,7 +257,7 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
                 </span>
                 <span aria-hidden="true">·</span>
                 <span className="font-mono text-slate-300">
-                  Frame {currentFrameIdx + 1} / 8
+                  Frame {currentFrameIdx + 1} / {totalFramesCount}
                 </span>
               </div>
 

@@ -19,6 +19,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "https-proxy-agent": "^9.1.0",
     "jszip": "^3.10.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -26,6 +27,8 @@
     "openai": "^7.39.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "socks-proxy-agent": "^10.1.0",
+    "undici": "^8.12.3",
     "uuid": "^14.0.3",
     "vite": "^8.3.0"
   },

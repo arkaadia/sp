@@ -9,8 +9,18 @@ import multer from 'multer';
 import { getProvider, getProviders } from './src/utils/providers.js';
 import { AssetLibrary } from './src/utils/AssetLibrary';
 import { validateEndpointUrl, redactSecrets, createRateLimiter, fetchSafeImage } from './src/utils/security.js';
+import {
+  loadProxyConfig,
+  getProxyConfig,
+  saveProxyConfig,
+  testProxyConnection,
+  isProxyActive,
+} from './src/utils/proxyService.js';
 
 dotenv.config();
+
+// Initialize proxy routing if configured from previous session
+loadProxyConfig();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -250,9 +260,91 @@ app.get('/api/health', (_req, res) => {
     host: HOST,
     port: PORT,
     aiAvailable: ai !== null,
+    proxyActive: isProxyActive(),
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
+});
+
+// -------------------------------------------------------------
+// Network Proxy Configuration & Diagnostics Endpoints
+// -------------------------------------------------------------
+app.get('/api/proxy', (_req, res) => {
+  try {
+    const config = getProxyConfig();
+    res.json({
+      config,
+      isProxyActive: isProxyActive(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to retrieve proxy configuration' });
+  }
+});
+
+app.post('/api/proxy/test', async (req, res) => {
+  try {
+    const { type, hostname, port, secret, username, password } = req.body;
+    const testResult = await testProxyConnection({
+      enabled: true,
+      type: type || 'HTTP',
+      hostname: hostname || '',
+      port: Number(port) || 8080,
+      secret: secret || '',
+      username: username || '',
+      password: password || '',
+    });
+    res.json(testResult);
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      message: `Proxy test failed with internal error: ${err.message}`,
+    });
+  }
+});
+
+app.post('/api/proxy/save', async (req, res) => {
+  try {
+    const { enabled, type, hostname, port, secret, username, password } = req.body;
+    const saved = saveProxyConfig({
+      enabled: enabled !== undefined ? Boolean(enabled) : true,
+      type: type || 'HTTP',
+      hostname: hostname ? String(hostname).trim() : '',
+      port: Number(port) || 8080,
+      secret: secret ? String(secret).trim() : '',
+      username: username ? String(username).trim() : '',
+      password: password ? String(password) : '',
+    });
+    res.json({
+      success: true,
+      config: saved,
+      isProxyActive: isProxyActive(),
+      message: saved.enabled
+        ? `Outbound traffic successfully routed through ${saved.type} proxy (${saved.hostname}:${saved.port}).`
+        : 'Proxy disabled. Direct internet traffic restored.',
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: `Failed to save proxy configuration: ${err.message}`,
+    });
+  }
+});
+
+app.post('/api/proxy/disable', (_req, res) => {
+  try {
+    const saved = saveProxyConfig({ enabled: false });
+    res.json({
+      success: true,
+      config: saved,
+      isProxyActive: false,
+      message: 'Proxy disabled. Restored direct connection for all outbound traffic.',
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: `Failed to disable proxy: ${err.message}`,
+    });
+  }
 });
 
 // Shared generation logic

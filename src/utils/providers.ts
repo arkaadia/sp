@@ -23,12 +23,16 @@ export interface Provider {
 }
 
 // -------------------------------------------------------------
-// OpenAI Client Setup with Security & Timeouts
+// OpenAI Client Setup with Security & Timeouts & Proxy Routing
 // -------------------------------------------------------------
 let defaultOpenai: OpenAI | null = null;
 const openaiApiKey = process.env.OPENAI_API_KEY;
-if (openaiApiKey && openaiApiKey !== 'MY_OPENAI_API_KEY' && openaiApiKey.trim().length > 0) {
-  defaultOpenai = new OpenAI({
+
+function getOrCreateDefaultOpenai(): OpenAI | null {
+  if (!openaiApiKey || openaiApiKey === 'MY_OPENAI_API_KEY' || openaiApiKey.trim().length === 0) {
+    return null;
+  }
+  return new OpenAI({
     apiKey: openaiApiKey,
     timeout: 30000,
     maxRetries: 1,
@@ -52,14 +56,14 @@ function createOpenAIClient(config?: { apiKey?: string; baseUrl?: string }, time
       maxRetries: 1,
     });
   }
-  return defaultOpenai;
+  return getOrCreateDefaultOpenai();
 }
 
 export const OpenAIProvider: Provider = {
   id: 'openai',
   name: 'OpenAI (DALL-E)',
   defaultModel: 'dall-e-3',
-  isConfigured: () => defaultOpenai !== null,
+  isConfigured: () => getOrCreateDefaultOpenai() !== null,
   checkCapabilities: (model?: string) => getModelCapability('openai', model || 'dall-e-3'),
 
   verifyConnection: async (config?: { apiKey?: string; baseUrl?: string }) => {

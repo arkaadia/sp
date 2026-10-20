@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "type": "HTTP",
+  "hostname": "",
+  "port": 8080,
+  "username": "",
+  "password": "",
+  "secret": "",
+  "updatedAt": "2026-10-20T05:35:49.686Z"
+}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Download, RefreshCw, Wand2, Image as ImageIcon, AlertCircle, Grid, Settings2, ChevronDown, ChevronUp, Eye, EyeOff, CheckCircle2, Cpu, Globe, Key, ShieldCheck, X, Sparkles, Check, Info, Paintbrush, Gamepad2, Layers, Sun, Zap } from 'lucide-react';
+import { Download, RefreshCw, Wand2, Image as ImageIcon, AlertCircle, Grid, Settings2, ChevronDown, ChevronUp, Eye, EyeOff, CheckCircle2, Cpu, Globe, Key, ShieldCheck, X, Sparkles, Check, Info, Paintbrush, Gamepad2, Layers, Sun, Zap, Network } from 'lucide-react';
 import { AVAILABLE_PROVIDERS, getModelCapability } from '../types/providers';
 import { PaintingCanvas } from './PaintingCanvas';
+import { ProxySettingsModal } from './ProxySettingsModal';
 import sampleAttackSheet from '../assets/images/elf_white_wings_attack_1792304222679.jpg';
 
 // Generate 2D Tangent-Space Normal Map (Standard Purplish-Blue #8080FF)
@@ -170,6 +171,19 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
   const [studioView, setStudioView] = useState<'canvas' | 'generator'>('canvas');
   const [canvasInitialImage, setCanvasInitialImage] = useState<string | null>(null);
   const [canvasEnhanceNotice, setCanvasEnhanceNotice] = useState<boolean>(false);
+  const [isProxyModalOpen, setIsProxyModalOpen] = useState<boolean>(false);
+  const [isProxyActive, setIsProxyActive] = useState<boolean>(false);
+
+  useEffect(() => {
+    fetch('/api/proxy')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.isProxyActive) {
+          setIsProxyActive(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [category, setCategory] = useState<'character' | 'prop' | 'environment'>('character');
 
@@ -560,7 +574,7 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
         </div>
 
         {/* View Mode Segmented Selector */}
-        <div className="flex items-center p-1 bg-[#141820] border border-slate-800 rounded-xl gap-1">
+        <div className="flex flex-wrap items-center p-1 bg-[#141820] border border-slate-800 rounded-xl gap-1">
           <button
             type="button"
             onClick={() => setStudioView('canvas')}
@@ -572,6 +586,23 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
           >
             <Paintbrush className="w-4 h-4" />
             <span>Painting & Creation Canvas</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsProxyModalOpen(true)}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-all border ${
+              isProxyActive
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 shadow-sm'
+                : 'border-slate-800 bg-[#10141d] text-slate-300 hover:text-white hover:border-slate-700'
+            }`}
+            title="Configure network proxy (MTPROTO, SOCKS5, HTTP, WEB)"
+          >
+            <Network className="w-4 h-4 text-amber-400" />
+            <span>Proxy Settings</span>
+            {isProxyActive && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" title="Proxy Active" />
+            )}
           </button>
 
           <button
@@ -1567,6 +1598,13 @@ export const AssetStudio: React.FC<{ initialAsset?: any; onSendToSlicer?: (url: 
     </div>
   </div>
       )}
+
+      {/* Network Proxy Configuration Modal */}
+      <ProxySettingsModal
+        isOpen={isProxyModalOpen}
+        onClose={() => setIsProxyModalOpen(false)}
+        onProxySaved={(config) => setIsProxyActive(config.enabled && Boolean(config.hostname))}
+      />
     </div>
   );
 };
