@@ -7,7 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import multer from 'multer';
 import { getProvider, getProviders } from './src/utils/providers.js';
-import { AssetLibrary } from './src/utils/AssetLibrary';
+import { AssetLibrary } from './src/utils/AssetLibrary.js';
 import { validateEndpointUrl, redactSecrets, createRateLimiter, fetchSafeImage } from './src/utils/security.js';
 import {
   loadProxyConfig,
@@ -17,7 +17,7 @@ import {
   isProxyActive,
 } from './src/utils/proxyService.js';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 // Initialize proxy routing if configured from previous session
 loadProxyConfig();
@@ -44,8 +44,12 @@ const upload = multer({
 });
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
-const HOST = "0.0.0.0";
+const HOST = process.env.HOST || '0.0.0.0';
+let PORT = Number(process.env.PORT) || 3000;
+// When running in development, if PORT is set to 8080 (Cloud Run container port occupied by nginx), fallback to 3000
+if (PORT === 8080 && process.env.NODE_ENV !== 'production') {
+  PORT = 3000;
+}
 
 app.use(express.json({ limit: '15mb' }));
 app.use('/api/assets/images', express.static(path.join(__dirname, 'data/assets')));
@@ -469,7 +473,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        host: "0.0.0.0",
+        host: HOST,
         port: PORT,
       },
       appType: 'spa',
@@ -486,8 +490,8 @@ async function startServer() {
     });
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Elysian Sprite Studio running at http://0.0.0.0:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`Elysian Sprite Studio running at http://${HOST}:${PORT}`);
   });
 
   // Graceful shutdown

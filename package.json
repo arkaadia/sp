@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "PORT=3000 tsx server.ts",
     "validate:sources": "node -e \"const fs=require('fs');const req=['src/App.tsx','src/main.tsx','src/data/spriteData.ts','src/types/sprites.ts','server.ts','package.json','vite.config.ts','index.html'];const miss=req.filter(f=>!fs.existsSync(f));if(miss.length){console.error('Missing required source files:',miss);process.exit(1);}\"",
     "build": "vite build",
     "start": "node server.ts",
