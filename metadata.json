@@ -1,6 +1,6 @@
 {
   "name": "Elysian Sprite Studio - 2D Sprite Sheet & Tileset Generator",
-  "description": "2D character sprite sheet studio for 8-frame Idle, Run, and Jump animations with interactive physics preview, background removal, and clean PNG tileset export.",
+  "description": "2D character sprite sheet studio for 8-frame Idle, Run, and Jump animations with interactive physics preview, background removal, Android phone/tablet touch support, and APK package download.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

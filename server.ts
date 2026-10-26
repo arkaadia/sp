@@ -16,6 +16,7 @@ import {
   testProxyConnection,
   isProxyActive,
 } from './src/utils/proxyService.js';
+import { generateSignedAndroidApk } from './src/utils/apkGeneratorServer.js';
 
 dotenv.config({ override: true });
 
@@ -268,6 +269,94 @@ app.get('/api/health', (_req, res) => {
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
+});
+
+// -------------------------------------------------------------
+// Android APK Package Build & Direct Download Endpoints
+// -------------------------------------------------------------
+app.get('/api/android/apk-info', async (req, res) => {
+  try {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || `${HOST}:${PORT}`;
+    const originUrl = `${protocol}://${hostHeader}`;
+    const apk = await generateSignedAndroidApk({ serverUrl: originUrl });
+    res.json({
+      filename: apk.filename,
+      sha256: apk.sha256,
+      sizeBytes: apk.sizeBytes,
+      metadata: apk.metadata,
+      downloadUrl: '/api/android/download-apk',
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to get APK metadata' });
+  }
+});
+
+app.get('/api/android/download-apk', async (req, res) => {
+  try {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || `${HOST}:${PORT}`;
+    const originUrl = `${protocol}://${hostHeader}`;
+
+    const profile = (req.query.profile as any) || 'universal';
+    const orientation = (req.query.orientation as any) || 'sensor';
+
+    const apk = await generateSignedAndroidApk({
+      serverUrl: (req.query.serverUrl as string) || originUrl,
+      deviceProfile: profile,
+      orientation,
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', `attachment; filename="${apk.filename}"`);
+    res.setHeader('Content-Length', String(apk.sizeBytes));
+    res.setHeader('X-APK-SHA256', apk.sha256);
+    res.send(apk.buffer);
+  } catch (err: any) {
+    console.error('APK Download error:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate Android APK' });
+  }
+});
+
+app.post('/api/android/build-apk', async (req, res) => {
+  try {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || `${HOST}:${PORT}`;
+    const originUrl = `${protocol}://${hostHeader}`;
+
+    const {
+      appName,
+      packageId,
+      versionName,
+      serverUrl,
+      orientation,
+      deviceProfile,
+      enableHaptics,
+      enableStylus,
+      fullscreen,
+    } = req.body || {};
+
+    const apk = await generateSignedAndroidApk({
+      appName,
+      packageId,
+      versionName,
+      serverUrl: serverUrl || originUrl,
+      orientation,
+      deviceProfile,
+      enableHaptics,
+      enableStylus,
+      fullscreen,
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', `attachment; filename="${apk.filename}"`);
+    res.setHeader('Content-Length', String(apk.sizeBytes));
+    res.setHeader('X-APK-SHA256', apk.sha256);
+    res.send(apk.buffer);
+  } catch (err: any) {
+    console.error('Custom APK Build error:', err);
+    res.status(500).json({ error: err.message || 'Failed to build custom Android APK' });
+  }
 });
 
 // -------------------------------------------------------------

@@ -501,82 +501,92 @@ export const ActionArena: React.FC<ActionArenaProps> = ({
           />
         </div>
 
-        {/* Touch / Clickable Controls for Mobile / Action Test */}
-        <div className="w-full px-6 py-4 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        {/* Ergonomic Android Phone & Tablet Touch Gamepad */}
+        <div className="w-full px-4 sm:px-6 py-4 bg-slate-900 border-t border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 select-none touch-manipulation">
+          {/* Left Thumb Zone: Directional Pad */}
+          <div className="grid grid-cols-3 gap-2.5 sm:flex sm:items-center">
             <button
-              onMouseDown={() => (keysPressed.current.left = true)}
-              onMouseUp={() => (keysPressed.current.left = false)}
-              onTouchStart={() => (keysPressed.current.left = true)}
-              onTouchEnd={() => (keysPressed.current.left = false)}
-              className="p-2.5 bg-slate-800 hover:bg-slate-700 active:bg-amber-400 active:text-slate-950 text-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+              onPointerDown={() => {
+                keysPressed.current.left = true;
+                if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15);
+              }}
+              onPointerUp={() => (keysPressed.current.left = false)}
+              onPointerLeave={() => (keysPressed.current.left = false)}
+              onPointerCancel={() => (keysPressed.current.left = false)}
+              className="min-h-[48px] px-4 py-3 bg-slate-800 hover:bg-slate-700 active:bg-amber-400 active:text-slate-950 text-slate-100 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border border-slate-700"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Run L</span>
             </button>
 
             <button
-              onMouseDown={() => (keysPressed.current.right = true)}
-              onMouseUp={() => (keysPressed.current.right = false)}
-              onTouchStart={() => (keysPressed.current.right = true)}
-              onTouchEnd={() => (keysPressed.current.right = false)}
-              className="p-2.5 bg-slate-800 hover:bg-slate-700 active:bg-amber-400 active:text-slate-950 text-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+              onPointerDown={() => {
+                keysPressed.current.right = true;
+                if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15);
+              }}
+              onPointerUp={() => (keysPressed.current.right = false)}
+              onPointerLeave={() => (keysPressed.current.right = false)}
+              onPointerCancel={() => (keysPressed.current.right = false)}
+              className="min-h-[48px] px-4 py-3 bg-slate-800 hover:bg-slate-700 active:bg-amber-400 active:text-slate-950 text-slate-100 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border border-slate-700"
             >
               <span>Run R</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
             <button
-              onMouseDown={() => (keysPressed.current.jump = true)}
-              onMouseUp={() => (keysPressed.current.jump = false)}
-              onTouchStart={() => (keysPressed.current.jump = true)}
-              onTouchEnd={() => (keysPressed.current.jump = false)}
-              className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 active:bg-amber-400 active:text-slate-950 text-slate-200 font-semibold rounded-lg text-xs transition-all flex items-center gap-1.5"
+              onPointerDown={() => {
+                keysPressed.current.jump = true;
+                if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(25);
+              }}
+              onPointerUp={() => (keysPressed.current.jump = false)}
+              onPointerLeave={() => (keysPressed.current.jump = false)}
+              onPointerCancel={() => (keysPressed.current.jump = false)}
+              className="min-h-[48px] px-4 py-3 bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 active:bg-amber-400 active:text-slate-950 text-amber-300 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
             >
               <ArrowUp className="w-4 h-4" />
-              <span>Jump (Space)</span>
+              <span>Jump</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Right Thumb Zone: Combat & Action Buttons */}
+          <div className="grid grid-cols-3 gap-2.5 sm:flex sm:items-center">
             <button
-              onMouseDown={() => {
+              onPointerDown={() => {
                 keysPressed.current.attack = true;
                 playSfx('slash');
+                if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(30);
               }}
-              onMouseUp={() => (keysPressed.current.attack = false)}
-              onTouchStart={() => {
-                keysPressed.current.attack = true;
-                playSfx('slash');
-              }}
-              onTouchEnd={() => (keysPressed.current.attack = false)}
-              className="px-3.5 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 active:scale-95 font-bold rounded-lg text-xs transition-all flex items-center gap-1"
+              onPointerUp={() => (keysPressed.current.attack = false)}
+              onPointerLeave={() => (keysPressed.current.attack = false)}
+              onPointerCancel={() => (keysPressed.current.attack = false)}
+              className="min-h-[48px] px-4 py-3 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 active:scale-95 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1"
             >
               <span>Attack (Z)</span>
             </button>
 
             <button
-              onMouseDown={() => {
+              onPointerDown={() => {
                 keysPressed.current.defense = true;
                 playSfx('shield');
+                if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(20);
               }}
-              onMouseUp={() => (keysPressed.current.defense = false)}
-              onTouchStart={() => {
-                keysPressed.current.defense = true;
-                playSfx('shield');
-              }}
-              onTouchEnd={() => (keysPressed.current.defense = false)}
-              className="px-3.5 py-2.5 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 active:scale-95 font-bold rounded-lg text-xs transition-all flex items-center gap-1"
+              onPointerUp={() => (keysPressed.current.defense = false)}
+              onPointerLeave={() => (keysPressed.current.defense = false)}
+              onPointerCancel={() => (keysPressed.current.defense = false)}
+              className="min-h-[48px] px-4 py-3 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 active:scale-95 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1"
             >
               <span>Defense (X)</span>
             </button>
 
             <button
-              onMouseDown={() => (keysPressed.current.climb = true)}
-              onMouseUp={() => (keysPressed.current.climb = false)}
-              onTouchStart={() => (keysPressed.current.climb = true)}
-              onTouchEnd={() => (keysPressed.current.climb = false)}
-              className="px-3.5 py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 active:scale-95 font-bold rounded-lg text-xs transition-all flex items-center gap-1"
+              onPointerDown={() => {
+                keysPressed.current.climb = true;
+                if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15);
+              }}
+              onPointerUp={() => (keysPressed.current.climb = false)}
+              onPointerLeave={() => (keysPressed.current.climb = false)}
+              onPointerCancel={() => (keysPressed.current.climb = false)}
+              className="min-h-[48px] px-4 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 active:scale-95 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1"
             >
               <span>Climb (C)</span>
             </button>

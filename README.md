@@ -11,6 +11,22 @@ A modern, high-performance web studio designed for indie game developers, pixel 
 
 ---
 
+## 📱 Android Phone & Tablet Edition + `.APK` Download
+
+Elysian Sprite Studio now includes full **Android Smartphone & Tablet touch support**, **PWA / WebAPK offline installation**, and a built-in **Signed Android `.APK` Builder**:
+
+- **Pre-built Universal Android APK**: [`public/downloads/ElysianSpriteStudio-v2.4.0-android-universal.apk`](public/downloads/ElysianSpriteStudio-v2.4.0-android-universal.apk)
+- **Live Server APK Endpoints**:
+  - `GET /api/android/download-apk?profile=universal` — Direct signed `.apk` download (`Universal`, `Tablet`, or `Phone` profile)
+  - `POST /api/android/build-apk` — Custom `.apk` packager (custom App Name, Package ID, Server URL, Orientation, Haptics, and Stylus/S-Pen options)
+- **Android Touch UX**:
+  - Thumb-zone bottom navigation bar + bottom-sheet module drawer for smartphones and compact tablets
+  - Ergonomic Android Touch Gamepad with haptic vibration (`navigator.vibrate`) in the 60 FPS Action Arena
+  - Multi-touch & S-Pen / Stylus pointer support in Painting Canvas and Physics & Hitbox Editor
+  - 1-Click Android Studio + Capacitor Gradle Project (`.ZIP`) export
+
+---
+
 ## 🐧 Linux 1-Command Automated Production Installation
 
 On Ubuntu (20.04+) or Debian (11+), deploy the production service with automated runtime provisioning, systemd daemon, and global CLI:
