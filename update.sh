@@ -223,7 +223,7 @@ fi
 # Health check
 if [[ -f "${INSTALL_DIR}/.env" ]]; then
     PORT=$(grep -E '^PORT=' "${INSTALL_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "3000")
-    HOST=$(grep -E '^HOST=' "${INSTALL_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "0.0.0.0")
+    HOST=$(grep -E '^HOST=' "${INSTALL_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "127.0.0.1")
     curl -s "http://${HOST}:${PORT}/api/health" || true
     echo ""
 fi

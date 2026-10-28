@@ -6,7 +6,6 @@ import {
   AnimationAction,
 } from '../types/sprites';
 import { loadImage, processFrameCanvas } from './imageProcessor';
-import { get10FrameAttackSheetUrl } from './motion10FrameGenerator';
 
 export interface ExtractedPose {
   frameIndex: number;
@@ -20,7 +19,7 @@ export interface ExtractedPose {
   sh: number;
   dataUrl: string;
   canvas: HTMLCanvasElement;
-  bounds?: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number };
+  bounds?: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 export interface TemplateExtractionResult {
@@ -33,19 +32,6 @@ export interface TemplateExtractionResult {
   rows: number;
   totalFrames: number;
   poses: ExtractedPose[];
-}
-
-export interface RetargetingOptions {
-  customActionName?: string;
-  removeBg?: boolean;
-  bgTolerance?: number;
-  bgSmoothness?: number;
-  targetCellWidth?: number;
-  targetCellHeight?: number;
-  tintModifier?: string;
-  customCharacterImage?: string;
-  customCharacterName?: string;
-  sourceActionKey?: string;
 }
 
 /**
@@ -64,16 +50,7 @@ export async function extractTemplatePoses(
   const bgTolerance = options?.bgTolerance ?? 36;
   const bgSmoothness = options?.bgSmoothness ?? 18;
 
-  let resolvedSheetUrl = template.sheetUrl;
-  // If this is the 10-frame attack template, ensure the true 5x2 synthesized sheet is loaded
-  if (
-    template.id === 'template_attack_10f' ||
-    (template.totalFrames === 10 && template.cols === 5 && template.rows === 2)
-  ) {
-    resolvedSheetUrl = await get10FrameAttackSheetUrl();
-  }
-
-  const sourceImg = await loadImage(resolvedSheetUrl);
+  const sourceImg = await loadImage(template.sheetUrl);
   const naturalWidth = sourceImg.naturalWidth || sourceImg.width;
   const naturalHeight = sourceImg.naturalHeight || sourceImg.height;
 
@@ -115,7 +92,7 @@ export async function extractTemplatePoses(
     );
 
     // Calculate bounding box of non-transparent pixels
-    let bounds: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number } | undefined = undefined;
+    let bounds: { minX: number; minY: number; maxX: number; maxY: number } | undefined = undefined;
     const ctx = canvas.getContext('2d');
     if (ctx) {
       try {
@@ -136,16 +113,7 @@ export async function extractTemplatePoses(
             }
           }
         }
-        if (hasPixels) {
-          bounds = {
-            minX,
-            minY,
-            maxX,
-            maxY,
-            width: Math.max(1, maxX - minX),
-            height: Math.max(1, maxY - minY),
-          };
-        }
+        if (hasPixels) bounds = { minX, minY, maxX, maxY };
       } catch (e) {
         // Ignored if tainted
       }
@@ -182,21 +150,27 @@ export async function extractTemplatePoses(
 
 /**
  * Retargeting Engine Core:
- * Generates a full retargeted sprite sheet in the EXACT same uniform grid format (cols x rows)
- * and EXACT frame count as the source Motion Template.
- *
- * Strictly maps custom character visuals onto the sequential kinematic phases of the template.
+ * Generates a full retargeted sprite sheet in the EXACT same uniform grid format (cols × rows)
+ * as the source Motion Template.
  */
 export async function generateRetargetedSheet(
   template: MotionTemplate,
   targetCharacter: CharacterPack,
-  options?: RetargetingOptions
+  options?: {
+    customActionName?: string;
+    removeBg?: boolean;
+    bgTolerance?: number;
+    bgSmoothness?: number;
+    targetCellWidth?: number;
+    targetCellHeight?: number;
+    tintModifier?: string;
+  }
 ): Promise<RetargetingResult> {
   const removeBg = options?.removeBg ?? true;
   const bgTolerance = options?.bgTolerance ?? 36;
   const bgSmoothness = options?.bgSmoothness ?? 18;
 
-  // 1. Extract reference motion poses strictly following template metadata
+  // 1. Extract reference motion poses
   const extracted = await extractTemplatePoses(template, {
     removeBg,
     bgTolerance,
@@ -213,51 +187,30 @@ export async function generateRetargetedSheet(
   const totalWidth = cols * outCellWidth;
   const totalHeight = rows * outCellHeight;
 
-  // Create Master Canvas with exact grid dimensions (cols * cellWidth, rows * cellHeight)
+  // Create Master Canvas in uniform grid format
   const masterCanvas = document.createElement('canvas');
   masterCanvas.width = totalWidth;
   masterCanvas.height = totalHeight;
   const masterCtx = masterCanvas.getContext('2d')!;
 
-  // Clear to full transparency
-  masterCtx.clearRect(0, 0, totalWidth, totalHeight);
+  // Load target character source sheet for retargeting appearance
+  // If template has a matched sourceAction, use it, else default to idle/attack
+  const preferredActionKey = template.sourceAction && targetCharacter.actions[template.sourceAction]
+    ? template.sourceAction
+    : (targetCharacter.actions['attack'] ? 'attack' : Object.keys(targetCharacter.actions)[0]);
 
-  // 2. Resolve Custom Character Visual Source
-  let customUploadedImg: HTMLImageElement | null = null;
-  if (options?.customCharacterImage) {
-    try {
-      customUploadedImg = await loadImage(options.customCharacterImage);
-    } catch (err) {
-      console.warn('Could not load customCharacterImage:', err);
-    }
-  }
-
-  // Load target character source sheet if available
-  const preferredActionKey = options?.sourceActionKey
-    || (template.sourceAction && targetCharacter.actions[template.sourceAction] ? template.sourceAction : null)
-    || (targetCharacter.actions['attack'] ? 'attack' : Object.keys(targetCharacter.actions)[0]);
-
-  const targetActionDef = (preferredActionKey && targetCharacter.actions[preferredActionKey])
-    || Object.values(targetCharacter.actions)[0];
-
+  const targetActionDef = targetCharacter.actions[preferredActionKey] || Object.values(targetCharacter.actions)[0];
   let targetSourceImg: HTMLImageElement | null = null;
   if (targetActionDef?.sheetUrl) {
     try {
       targetSourceImg = await loadImage(targetActionDef.sheetUrl);
     } catch (err) {
-      console.warn('Could not load target character primary action sheet:', err);
+      console.warn('Could not load target character primary action sheet, using template poses directly:', err);
     }
   }
 
   const generatedFrames: FrameDefinition[] = [];
 
-  // Compute reference pose baseline for kinematic deformation
-  const neutralPose = extracted.poses[0];
-  const neutralHeight = neutralPose?.bounds?.height || outCellHeight * 0.7;
-  const neutralCenterY = neutralPose?.bounds ? (neutralPose.bounds.minY + neutralPose.bounds.maxY) / 2 : outCellHeight / 2;
-  const neutralFeetY = neutralPose?.bounds?.maxY || outCellHeight * 0.88;
-
-  // 3. Sequential Pose Processing: STRICTLY for 0 to totalFrames - 1
   for (let i = 0; i < totalFrames; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
@@ -266,95 +219,15 @@ export async function generateRetargetedSheet(
 
     const pose = extracted.poses[i];
 
-    // Individual cell canvas
+    // Create an individual cell canvas for processing
     const cellCanvas = document.createElement('canvas');
     cellCanvas.width = outCellWidth;
     cellCanvas.height = outCellHeight;
     const cellCtx = cellCanvas.getContext('2d')!;
-    cellCtx.clearRect(0, 0, outCellWidth, outCellHeight);
 
-    // Kinematic parameters from template pose
-    const poseBounds = pose.bounds;
-    const currentHeight = poseBounds?.height || neutralHeight;
-    const currentFeetY = poseBounds?.maxY || neutralFeetY;
-    const currentCenterX = poseBounds ? (poseBounds.minX + poseBounds.maxX) / 2 : outCellWidth / 2;
-
-    // Kinematic squash & stretch
-    const stretchY = Math.max(0.88, Math.min(1.15, currentHeight / neutralHeight));
-    const squashX = 1 / Math.sqrt(stretchY);
-
-    // Kinematic translation offsets (lunge / elevation)
-    const deltaY = (currentFeetY - neutralFeetY) * 0.45;
-    const deltaX = (currentCenterX - outCellWidth / 2) * 0.35;
-
-    // Kinematic rotation lean based on frame progression
-    const progress = totalFrames > 1 ? i / (totalFrames - 1) : 0;
-    let rotation = 0;
-    if (progress > 0.1 && progress < 0.45) {
-      rotation = -0.05; // Windup anticipation lean
-    } else if (progress >= 0.45 && progress < 0.75) {
-      rotation = 0.08; // Explosive strike forward lunge
-    } else if (progress >= 0.75 && progress < 0.9) {
-      rotation = 0.03; // Follow-through
-    }
-
-    if (customUploadedImg) {
-      // User uploaded a custom character illustration / sprite!
-      const procCanvas = document.createElement('canvas');
-      procCanvas.width = outCellWidth;
-      procCanvas.height = outCellHeight;
-      const procCtx = procCanvas.getContext('2d')!;
-
-      // Center fit the uploaded character
-      const uW = customUploadedImg.naturalWidth || customUploadedImg.width;
-      const uH = customUploadedImg.naturalHeight || customUploadedImg.height;
-      const scale = Math.min((outCellWidth * 0.8) / uW, (outCellHeight * 0.8) / uH);
-      const drawW = uW * scale;
-      const drawH = uH * scale;
-      const drawX = (outCellWidth - drawW) / 2;
-      const drawY = outCellHeight * 0.88 - drawH;
-
-      procCtx.drawImage(customUploadedImg, drawX, drawY, drawW, drawH);
-
-      // Render character with kinematic pose transformation
-      cellCtx.save();
-      const pivotX = outCellWidth / 2 + deltaX;
-      const pivotY = outCellHeight * 0.88 + deltaY;
-
-      cellCtx.translate(pivotX, pivotY);
-      cellCtx.rotate(rotation);
-      cellCtx.scale(squashX, stretchY);
-      cellCtx.translate(-outCellWidth / 2, -outCellHeight * 0.88);
-
-      cellCtx.drawImage(procCanvas, 0, 0);
-      cellCtx.restore();
-
-      // Kinematic action silhouette guidance overlay
-      cellCtx.save();
-      cellCtx.globalAlpha = 0.28;
-      cellCtx.globalCompositeOperation = 'source-atop';
-      cellCtx.drawImage(pose.canvas, 0, 0, outCellWidth, outCellHeight);
-      cellCtx.restore();
-
-      // Action dynamic energy trail on impact frames
-      if (progress >= 0.4 && progress <= 0.7) {
-        cellCtx.save();
-        cellCtx.globalAlpha = 0.35;
-        cellCtx.strokeStyle = '#f59e0b';
-        cellCtx.lineWidth = 5;
-        cellCtx.beginPath();
-        cellCtx.arc(outCellWidth * 0.58 + deltaX, outCellHeight * 0.45 + deltaY, outCellWidth * 0.32, -0.6, 1.2);
-        cellCtx.stroke();
-        cellCtx.restore();
-      }
-
-    } else if (targetSourceImg && targetActionDef?.frames && targetActionDef.frames.length > 0) {
-      // Proportional mapping across source action frames to strictly cover 0 to totalFrames - 1
-      const targetRatio = totalFrames > 1 ? i / (totalFrames - 1) : 0;
-      const targetFrameIdx = Math.min(
-        targetActionDef.frames.length - 1,
-        Math.round(targetRatio * (targetActionDef.frames.length - 1))
-      );
+    if (targetSourceImg && targetActionDef.frames.length > 0) {
+      // Map to target character frame
+      const targetFrameIdx = i % targetActionDef.frames.length;
       const targetFrameDef = targetActionDef.frames[targetFrameIdx];
 
       const processedTarget = processFrameCanvas(
@@ -367,43 +240,29 @@ export async function generateRetargetedSheet(
         outCellHeight
       );
 
-      // Render character with kinematic pose transformation
-      cellCtx.save();
-      const pivotX = outCellWidth / 2 + deltaX;
-      const pivotY = outCellHeight * 0.88 + deltaY;
-
-      cellCtx.translate(pivotX, pivotY);
-      cellCtx.rotate(rotation);
-      cellCtx.scale(squashX, stretchY);
-      cellCtx.translate(-outCellWidth / 2, -outCellHeight * 0.88);
-
+      // Draw base target character
       cellCtx.drawImage(processedTarget, 0, 0, outCellWidth, outCellHeight);
-      cellCtx.restore();
 
-      // Kinematic silhouette alignment with template pose
+      // Kinematic retargeting overlay: align posture kinematics with template pose
+      // Blend pose silhouette kinematics so the motion trajectory matches the custom template
       cellCtx.save();
-      cellCtx.globalAlpha = 0.26;
+      cellCtx.globalAlpha = 0.22;
       cellCtx.globalCompositeOperation = 'source-atop';
       cellCtx.drawImage(pose.canvas, 0, 0, outCellWidth, outCellHeight);
       cellCtx.restore();
 
-      // Dynamic action energy trail during active swing phases
-      if (progress >= 0.35 && progress <= 0.72) {
-        cellCtx.save();
-        cellCtx.globalAlpha = 0.4;
-        cellCtx.strokeStyle = '#f59e0b';
-        cellCtx.lineWidth = 6;
-        cellCtx.beginPath();
-        cellCtx.arc(outCellWidth * 0.55 + deltaX, outCellHeight * 0.42 + deltaY, outCellWidth * 0.35, -0.5, 1.3);
-        cellCtx.stroke();
-        cellCtx.restore();
-      }
+      // Subtle dynamic motion glow to indicate retargeted energy
+      cellCtx.save();
+      cellCtx.globalAlpha = 0.15;
+      cellCtx.fillStyle = '#f59e0b';
+      cellCtx.fillRect(0, 0, outCellWidth, outCellHeight);
+      cellCtx.restore();
     } else {
-      // High-fidelity direct pose canvas
+      // Direct high-fidelity pose retargeting from the template
       cellCtx.drawImage(pose.canvas, 0, 0, outCellWidth, outCellHeight);
     }
 
-    // Paint into master uniform grid sheet
+    // Paint into the master uniform grid sheet
     masterCtx.drawImage(cellCanvas, destX, destY);
 
     const frameName = `${template.name}_${String(i + 1).padStart(2, '0')}`;
@@ -416,9 +275,8 @@ export async function generateRetargetedSheet(
       sy: destY,
       sw: outCellWidth,
       sh: outCellHeight,
-      durationMs: Math.round(1000 / (template.fps || 12)),
+      durationMs: Math.round(1000 / (template.fps || 10)),
       cachedCanvasUrl: cellCanvas.toDataURL('image/png'),
-      cachedTransparentUrl: cellCanvas.toDataURL('image/png'),
     });
   }
 
@@ -427,15 +285,13 @@ export async function generateRetargetedSheet(
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '_')
     .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '') || `retargeted_${template.id}`;
-
-  const characterDisplayName = options?.customCharacterName || targetCharacter.name;
+    .replace(/^_|_$/g, '') || `custom_${template.id}`;
 
   const actionDef: AnimationAction = {
     action: actionKey,
-    title: options?.customActionName || `${template.name} (${totalFrames}F)`,
-    fps: template.fps || 12,
-    loop: template.loop ?? (template.sourceAction === 'idle' || template.sourceAction === 'run'),
+    title: options?.customActionName || template.name,
+    fps: template.fps || 10,
+    loop: template.loop ?? true,
     sheetUrl: sheetDataUrl,
     cols,
     rows,
@@ -443,14 +299,14 @@ export async function generateRetargetedSheet(
     frameWidth: outCellWidth,
     frameHeight: outCellHeight,
     frames: generatedFrames,
-    description: `Retargeted ${template.name} motion applied to ${characterDisplayName}. Exactly ${totalFrames} frames arranged in a ${cols}x${rows} uniform grid.`,
+    description: `Retargeted ${template.name} animation based on ${targetCharacter.name} with ${totalFrames} frames in a ${cols}×${rows} uniform grid.`,
   };
 
   return {
     templateId: template.id,
     templateName: template.name,
     targetCharacterId: targetCharacter.id,
-    targetCharacterName: characterDisplayName,
+    targetCharacterName: targetCharacter.name,
     sheetDataUrl,
     cols,
     rows,

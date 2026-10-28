@@ -208,193 +208,162 @@ export const OpenAIProvider: Provider = {
 };
 
 // -------------------------------------------------------------
-// Google AI Studio (Imagen 3 Native REST API)
+// Google Gemini (Imagen 3) Setup
 // -------------------------------------------------------------
-const googleApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_STUDIO_API_KEY;
+let defaultGemini: GoogleGenAI | null = null;
+const geminiApiKey = process.env.GEMINI_API_KEY;
+if (geminiApiKey && geminiApiKey !== 'MY_GEMINI_API_KEY' && geminiApiKey.trim().length > 0) {
+  defaultGemini = new GoogleGenAI({
+    apiKey: geminiApiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
 
-export const GoogleImagenProvider: Provider = {
-  id: 'google-imagen',
+function createGeminiClient(config?: { apiKey?: string }): GoogleGenAI | null {
+  if (config?.apiKey) {
+    return new GoogleGenAI({
+      apiKey: config.apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+  }
+  return defaultGemini;
+}
+
+export const GeminiProvider: Provider = {
+  id: 'gemini',
   name: 'Google AI (Imagen 3)',
   defaultModel: 'imagen-3.0-generate-001',
-  isConfigured: () => Boolean(googleApiKey && googleApiKey !== 'MY_GEMINI_API_KEY' && googleApiKey.trim().length > 0),
-  checkCapabilities: (model?: string) => getModelCapability('google-imagen', model || 'imagen-3.0-generate-001'),
+  isConfigured: () => {
+    const key = process.env.GEMINI_API_KEY;
+    return Boolean(key && key !== 'MY_GEMINI_API_KEY' && key.trim().length > 0);
+  },
+  checkCapabilities: (model?: string) => getModelCapability('gemini', model || 'imagen-3.0-generate-001'),
 
   verifyConnection: async (config?: { apiKey?: string; baseUrl?: string }) => {
-    const key = config?.apiKey?.trim() || googleApiKey;
+    const key = config?.apiKey?.trim() || geminiApiKey;
     if (!key || key === 'MY_GEMINI_API_KEY') return false;
     try {
-      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
-        headers: {
-          'x-goog-api-key': key,
-        },
-        signal: AbortSignal.timeout(10000),
-      });
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
+      const res = await fetch(endpoint);
       return res.ok;
-    } catch (err: any) {
-      console.error('Google AI verification failed:', redactSecrets(err?.message || 'Error'));
+    } catch (error: any) {
+      console.error('Google AI verification failed:', redactSecrets(error?.message || 'Error'));
       return false;
     }
   },
 
-  listModels: async (config?: { apiKey?: string; baseUrl?: string }) => {
-    const key = config?.apiKey?.trim() || googleApiKey;
-    if (key && key !== 'MY_GEMINI_API_KEY') {
-      try {
-        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
-          headers: {
-            'x-goog-api-key': key,
-          },
-          signal: AbortSignal.timeout(15000),
-        });
-        if (res.ok) {
-          const data: any = await res.json();
-          const models = (data.models || [])
-            .map((m: any) => (m.name || '').replace(/^models\//, ''))
-            .filter((name: string) => name.toLowerCase().includes('imagen'));
-          if (models.length > 0) return models;
-        }
-      } catch {
-        // Fall back to default known models
-      }
-    }
+  listModels: async () => {
     return ['imagen-3.0-generate-001', 'imagen-3.0-generate-002'];
   },
 
   generateImage: async (options: GenerationOptions) => {
-    const apiKey = options.apiKey?.trim() || googleApiKey;
+    const apiKey = options.apiKey?.trim() || geminiApiKey;
     if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-      const err: any = new Error(
-        'Google AI Studio API Key is not configured. Please enter your Google AI Studio API Key (starts with AIzaSy...) in the AI Model & API Configuration panel or configure GEMINI_API_KEY on the server.'
-      );
+      const err: any = new Error('Google AI Studio API Key is not configured on this server and no custom API Key was provided. Please enter your Google AI Studio API Key.');
       err.status = 503;
       throw err;
     }
 
-    const targetModel = options.model?.trim() || 'imagen-3.0-generate-001';
+    const targetModel = (options.model?.trim()) || 'imagen-3.0-generate-001';
+    const capabilities = getModelCapability('gemini', targetModel);
 
-    if (options.image) {
+    if (!capabilities.supportsTextToImage) {
       const err: any = new Error(
-        `Model '${targetModel}' does not support reference-image editing or variations. Please select a model supporting image editing (e.g. OpenAI 'dall-e-2') or clear the reference image.`
+        `Model '${targetModel}' does not support image generation. Please select 'imagen-3.0-generate-001' or 'imagen-3.0-generate-002'.`
       );
       err.status = 400;
       throw err;
     }
 
-    // Build the native REST endpoint
-    let endpointUrl = options.baseUrl?.trim();
-    if (!endpointUrl) {
-      endpointUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:predict`;
-    } else if (!endpointUrl.includes(':predict')) {
-      endpointUrl = endpointUrl.replace(/\/+$/, '') + `/models/${targetModel}:predict`;
-    }
-
-    const validation = validateEndpointUrl(endpointUrl);
-    if (!validation.valid) {
-      const err: any = new Error(`Endpoint URL validation failed: ${validation.error}`);
+    if (options.image) {
+      const err: any = new Error(
+        `Google Imagen 3 does not currently support reference-image variations or editing. Please select an editing model (such as OpenAI 'dall-e-2') or clear the reference image to generate from prompt only.`
+      );
       err.status = 400;
       throw err;
     }
 
-    // Google's native Imagen 3 JSON payload structure: instances, prompt, parameters
-    const payload = {
-      instances: [
-        {
-          prompt: options.prompt,
-        },
-      ],
-      parameters: {
-        sampleCount: 1,
-        aspectRatio: '1:1',
-        outputMimeType: 'image/png',
-      },
-    };
+    const endpoint = options.baseUrl?.trim() || `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:predict`;
 
     try {
-      // Pass the API key securely in the 'x-goog-api-key' header
-      const response = await fetch(endpointUrl, {
+      // Native REST request following Google Imagen 3 payload structure
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey,
-          'User-Agent': 'ElysianSpriteStudio/1.0',
         },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(60000), // 60s timeout for image synthesis
+        body: JSON.stringify({
+          instances: [
+            {
+              prompt: options.prompt,
+            },
+          ],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: '1:1',
+            outputMimeType: 'image/png',
+          },
+        }),
       });
 
       if (!response.ok) {
-        const errorBody: any = await response.json().catch(() => null);
-        const rawMessage = errorBody?.error?.message || `Google Imagen API returned status ${response.status} ${response.statusText}`;
-        const message = redactSecrets(rawMessage);
-        const status = response.status;
-
-        if (status === 400 && (message.includes('API key') || message.includes('API_KEY_INVALID'))) {
-          const err: any = new Error('Authentication failed (400 Bad Request): Invalid Google AI Studio API Key.');
-          err.status = 401;
-          throw err;
-        }
-        if (status === 401 || status === 403) {
-          const err: any = new Error(`Authentication failed (${status}): Invalid or unauthorized Google AI Studio API Key.`);
-          err.status = 401;
-          throw err;
-        }
-        if (status === 429) {
-          const err: any = new Error(`Google Imagen Quota Exceeded (429): ${message}`);
-          err.status = 429;
-          throw err;
-        }
-        if (status === 404) {
-          const err: any = new Error(`Model endpoint not found (404): ${message}. Verify model name '${targetModel}' or custom endpoint.`);
-          err.status = 404;
-          throw err;
-        }
-
-        const err: any = new Error(`Google Imagen 3 API Error (${status}): ${message}`);
-        err.status = status;
-        throw err;
+        const errorData: any = await response.json().catch(() => ({}));
+        const rawMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        const error: any = new Error(rawMessage);
+        error.status = response.status;
+        throw error;
       }
 
       const data: any = await response.json();
-      const prediction = data.predictions?.[0];
-      const base64Bytes = prediction?.bytesBase64Encoded || 
-                          prediction?.image?.imageBytes || 
-                          prediction?.image?.bytesBase64Encoded || 
-                          prediction?.imageBytes;
-
+      const base64Bytes = data?.predictions?.[0]?.bytesBase64Encoded || data?.generatedImages?.[0]?.image?.imageBytes;
       if (!base64Bytes) {
-        throw new Error('Google Imagen 3 API did not return image data in the predictions array.');
+        throw new Error('No image bytes were returned by the Google Imagen 3 predict API.');
       }
 
-      const mimeType = prediction?.mimeType || 'image/png';
-      const imageUrl = `data:${mimeType};base64,${base64Bytes}`;
-
       return {
-        imageUrl,
+        imageUrl: `data:image/png;base64,${base64Bytes}`,
         modelUsed: targetModel,
       };
     } catch (err: any) {
-      if (err.name === 'TimeoutError' || err.code === 'ETIMEDOUT') {
-        const error: any = new Error('Google Imagen 3 request timed out after 60 seconds.');
-        error.status = 504;
+      const status = err?.status || err?.statusCode || 500;
+      const rawMessage = err?.message || 'Google AI Imagen image generation failed';
+      const message = redactSecrets(rawMessage);
+
+      if (status === 401 || status === 403 || message.includes('API key') || message.includes('API_KEY_INVALID')) {
+        const error: any = new Error(`Authentication failed (401/403): Invalid or unauthorized Google AI Studio API key. Please check your credentials.`);
+        error.status = 401;
         throw error;
       }
-      throw err;
-    }
-  },
-};
 
-export const GeminiProvider = GoogleImagenProvider;
+      if (status === 429 || message.includes('quota') || message.includes('RESOURCE_EXHAUSTED')) {
+        const error: any = new Error(`Quota or Rate Limit Exceeded: Google AI quota exhausted. ${message}`);
+        error.status = 429;
+        throw error;
+      }
+
+      const error: any = new Error(`Google AI Imagen Error: ${message}`);
+      error.status = status;
+      throw error;
+    }
+  }
+};
 
 // -------------------------------------------------------------
 // Providers Registry
 // -------------------------------------------------------------
 export const getProviders = (): Provider[] => {
-  return [GoogleImagenProvider, OpenAIProvider];
+  return [OpenAIProvider, GeminiProvider];
 };
 
 export const getProvider = (id: string): Provider | undefined => {
-  if (id === 'gemini' || id === 'google-imagen') {
-    return GoogleImagenProvider;
-  }
   return getProviders().find(p => p.id === id);
 };

@@ -57,12 +57,12 @@ Upon launching, the installer displays the **DELAVAR STUDIO** terminal banner (i
 
 ## 3. Browser Access & Network Security
 
-### Network Access (Default: 0.0.0.0)
-By default, the service binds to **`0.0.0.0`** to accept connections from both local and external networks on port 3000.
+### Local Access (Default & Secure)
+By default, the service binds to **`127.0.0.1`** (localhost) for maximum security.
 Open your browser and navigate to:
 
 ```
-http://YOUR_SERVER_IP:3000
+http://127.0.0.1:3000
 ```
 
 ### Enabling LAN / Server Access
@@ -202,8 +202,8 @@ Configuration resides in `/opt/elysian-sprite-studio/.env`:
 # Server Port (default: 3000)
 PORT=3000
 
-# Server Host Binding (0.0.0.0 for external/LAN access)
-HOST=0.0.0.0
+# Server Host Binding (127.0.0.1 for local security, 0.0.0.0 for LAN/Proxy)
+HOST=127.0.0.1
 
 # Node Environment
 NODE_ENV=production
@@ -214,7 +214,7 @@ NODE_ENV=production
 GEMINI_API_KEY=""
 
 # Public Application URL
-APP_URL="http://0.0.0.0:3000"
+APP_URL="http://127.0.0.1:3000"
 ```
 
 ---

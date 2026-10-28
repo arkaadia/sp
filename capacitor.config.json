@@ -1,0 +1,14 @@
+{
+  "appId": "com.elysian.spritestudio",
+  "appName": "Elysian Sprite Studio",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0f1115"
+  }
+}

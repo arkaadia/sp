@@ -14,25 +14,25 @@ export interface ProviderInfo {
 
 export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   {
-    id: 'google-imagen',
-    name: 'Google AI (Imagen 3)',
-    defaultModel: 'imagen-3.0-generate-001',
-    knownModels: ['imagen-3.0-generate-001', 'imagen-3.0-generate-002'],
-    description: 'Google state-of-the-art text-to-image generator via native Imagen 3 REST API.'
-  },
-  {
     id: 'openai',
     name: 'OpenAI (DALL-E)',
     defaultModel: 'dall-e-3',
     knownModels: ['dall-e-3', 'dall-e-2'],
     description: 'Industry-standard high-fidelity image generator (DALL-E 3 & DALL-E 2).'
+  },
+  {
+    id: 'gemini',
+    name: 'Google AI (Imagen 3)',
+    defaultModel: 'imagen-3.0-generate-001',
+    knownModels: ['imagen-3.0-generate-001', 'imagen-3.0-generate-002'],
+    description: 'Google state-of-the-art text-to-image generator via native Imagen 3 REST API.'
   }
 ];
 
 export function getModelCapability(providerId: string, modelId?: string): ModelCapability {
   const model = (modelId || '').trim().toLowerCase();
 
-  if (providerId === 'gemini' || providerId === 'google-imagen') {
+  if (providerId === 'gemini') {
     if (!model || model.includes('imagen')) {
       return {
         supportsTextToImage: true,

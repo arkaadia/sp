@@ -127,8 +127,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '15mb' }));
 
@@ -136,11 +135,7 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        host: HOST,
-        port: PORT,
-      },
+      server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -151,8 +146,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, HOST, () => {
-    console.log(\`Elysian Sprite Studio running at http://\${HOST}:\${PORT}\`);
+  app.listen(PORT, () => {
+    console.log(\`Elysian Sprite Studio running at http://localhost:\${PORT}\`);
   });
 }
 
@@ -168,8 +163,8 @@ startServer();
 
 ## Quickstart:
 1. \`npm install\`
-2. \`bash setup.sh\`
-3. \`npm run dev\`
+2. \`npm run dev\`
+3. Open http://localhost:3000
 `
   );
 

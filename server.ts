@@ -7,7 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import multer from 'multer';
 import { getProvider, getProviders } from './src/utils/providers.js';
-import { AssetLibrary } from './src/utils/AssetLibrary.js';
+import { AssetLibrary } from './src/utils/AssetLibrary';
 import { validateEndpointUrl, redactSecrets, createRateLimiter, fetchSafeImage } from './src/utils/security.js';
 import {
   loadProxyConfig,
@@ -16,9 +16,8 @@ import {
   testProxyConnection,
   isProxyActive,
 } from './src/utils/proxyService.js';
-import { generateSignedAndroidApk } from './src/utils/apkGeneratorServer.js';
 
-dotenv.config({ override: true });
+dotenv.config();
 
 // Initialize proxy routing if configured from previous session
 loadProxyConfig();
@@ -45,12 +44,8 @@ const upload = multer({
 });
 
 const app = express();
+const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
-let PORT = Number(process.env.PORT) || 3000;
-// When running in development, if PORT is set to 8080 (Cloud Run container port occupied by nginx), fallback to 3000
-if (PORT === 8080 && process.env.NODE_ENV !== 'production') {
-  PORT = 3000;
-}
 
 app.use(express.json({ limit: '15mb' }));
 app.use('/api/assets/images', express.static(path.join(__dirname, 'data/assets')));
@@ -272,94 +267,6 @@ app.get('/api/health', (_req, res) => {
 });
 
 // -------------------------------------------------------------
-// Android APK Package Build & Direct Download Endpoints
-// -------------------------------------------------------------
-app.get('/api/android/apk-info', async (req, res) => {
-  try {
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-    const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || `${HOST}:${PORT}`;
-    const originUrl = `${protocol}://${hostHeader}`;
-    const apk = await generateSignedAndroidApk({ serverUrl: originUrl });
-    res.json({
-      filename: apk.filename,
-      sha256: apk.sha256,
-      sizeBytes: apk.sizeBytes,
-      metadata: apk.metadata,
-      downloadUrl: '/api/android/download-apk',
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to get APK metadata' });
-  }
-});
-
-app.get('/api/android/download-apk', async (req, res) => {
-  try {
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-    const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || `${HOST}:${PORT}`;
-    const originUrl = `${protocol}://${hostHeader}`;
-
-    const profile = (req.query.profile as any) || 'universal';
-    const orientation = (req.query.orientation as any) || 'sensor';
-
-    const apk = await generateSignedAndroidApk({
-      serverUrl: (req.query.serverUrl as string) || originUrl,
-      deviceProfile: profile,
-      orientation,
-    });
-
-    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-    res.setHeader('Content-Disposition', `attachment; filename="${apk.filename}"`);
-    res.setHeader('Content-Length', String(apk.sizeBytes));
-    res.setHeader('X-APK-SHA256', apk.sha256);
-    res.send(apk.buffer);
-  } catch (err: any) {
-    console.error('APK Download error:', err);
-    res.status(500).json({ error: err.message || 'Failed to generate Android APK' });
-  }
-});
-
-app.post('/api/android/build-apk', async (req, res) => {
-  try {
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-    const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || `${HOST}:${PORT}`;
-    const originUrl = `${protocol}://${hostHeader}`;
-
-    const {
-      appName,
-      packageId,
-      versionName,
-      serverUrl,
-      orientation,
-      deviceProfile,
-      enableHaptics,
-      enableStylus,
-      fullscreen,
-    } = req.body || {};
-
-    const apk = await generateSignedAndroidApk({
-      appName,
-      packageId,
-      versionName,
-      serverUrl: serverUrl || originUrl,
-      orientation,
-      deviceProfile,
-      enableHaptics,
-      enableStylus,
-      fullscreen,
-    });
-
-    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-    res.setHeader('Content-Disposition', `attachment; filename="${apk.filename}"`);
-    res.setHeader('Content-Length', String(apk.sizeBytes));
-    res.setHeader('X-APK-SHA256', apk.sha256);
-    res.send(apk.buffer);
-  } catch (err: any) {
-    console.error('Custom APK Build error:', err);
-    res.status(500).json({ error: err.message || 'Failed to build custom Android APK' });
-  }
-});
-
-// -------------------------------------------------------------
 // Network Proxy Configuration & Diagnostics Endpoints
 // -------------------------------------------------------------
 app.get('/api/proxy', (_req, res) => {
@@ -560,11 +467,7 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        host: HOST,
-        port: PORT,
-      },
+      server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);

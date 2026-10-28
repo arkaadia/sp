@@ -1,8 +1,12 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig(() => {
   return {
@@ -11,19 +15,25 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
+        includeAssets: [
+          'favicon.ico',
+          'apple-touch-icon.png',
+          'icon.svg',
+          'pwa-192x192.png',
+          'pwa-512x512.png',
+          'pwa-maskable-512x512.png',
+        ],
         manifest: {
           id: '/',
-          name: 'Elysian Sprite Studio - 2D Sprite Sheet & Tileset Generator',
+          name: 'Elysian Sprite Studio',
           short_name: 'SpriteStudio',
-          description: '2D character sprite sheet studio for 8-frame Idle, Run, and Jump animations with interactive physics preview, background removal, Android phone/tablet touch support, and APK package download.',
+          description: '2D Pixel Art Sprite Sheet Generator, 8-Frame Motion Animator, and Clean Tileset Workstation.',
           theme_color: '#0f1115',
           background_color: '#0f1115',
           display: 'standalone',
-          orientation: 'any',
           start_url: '/',
           scope: '/',
-          categories: ['games', 'graphics', 'developer tools'],
+          orientation: 'any',
           icons: [
             {
               src: '/pwa-192x192.png',
@@ -46,8 +56,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,woff,woff2}'],
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -56,7 +65,7 @@ export default defineConfig(() => {
                 cacheName: 'google-fonts-cache',
                 expiration: {
                   maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
+                  maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
                 },
                 cacheableResponse: {
                   statuses: [0, 200],
@@ -70,7 +79,7 @@ export default defineConfig(() => {
                 cacheName: 'gstatic-fonts-cache',
                 expiration: {
                   maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
+                  maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
                 },
                 cacheableResponse: {
                   statuses: [0, 200],
@@ -87,13 +96,14 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(import.meta.dirname || __dirname, '.'),
+        '@': path.resolve(__dirname, '.'),
       },
     },
     server: {
-      host: process.env.HOST || '0.0.0.0',
-      port: Number(process.env.PORT) || 3000,
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

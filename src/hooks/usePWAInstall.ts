@@ -9,17 +9,18 @@ export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [isAndroid, setIsAndroid] = useState(false);
 
   useEffect(() => {
+    // Detect standalone mode (already installed or running inside PWA container / webview)
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true;
     setIsInstalled(isStandalone);
 
+    // Detect iOS devices (iPhone, iPad, iPod)
     const userAgent = window.navigator.userAgent.toLowerCase();
-    setIsIOS(/iphone|ipad|ipod/.test(userAgent));
-    setIsAndroid(/android/.test(userAgent));
+    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(isIOSDevice);
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -56,28 +57,6 @@ export function usePWAInstall() {
     isInstallable: !!deferredPrompt,
     isInstalled,
     isIOS,
-    isAndroid,
     install,
   };
-}
-
-export function useOnlineStatus() {
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  );
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  return isOnline;
 }

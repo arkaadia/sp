@@ -417,7 +417,7 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
                   <button
                     onClick={() => {
                       setIsPlaying(false);
-                      setCurrentFrameIdx((prev) => (prev - 1 + totalFramesCount) % totalFramesCount);
+                      setCurrentFrameIdx((prev) => (prev - 1 + 8) % 8);
                     }}
                     title="Step Previous Frame"
                     className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
@@ -445,7 +445,7 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
                   <button
                     onClick={() => {
                       setIsPlaying(false);
-                      setCurrentFrameIdx((prev) => (prev + 1) % totalFramesCount);
+                      setCurrentFrameIdx((prev) => (prev + 1) % 8);
                     }}
                     title="Step Next Frame"
                     className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
@@ -498,21 +498,18 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
             </div>
           </div>
 
-          {/* Filmstrip Thumbnails */}
+          {/* 8-Frame Filmstrip Thumbnails */}
           <div className="border border-slate-800/80 rounded-xl p-4 bg-slate-900/50 space-y-2">
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span className="font-semibold text-slate-200">
-                {totalFramesCount}-Frame Sequence Filmstrip
+                8-Frame Sequence Filmstrip
               </span>
               <span>Click any frame to inspect</span>
             </div>
 
-            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
               {frames.map((f, i) => {
                 const isSelected = currentFrameIdx === i;
-                const sheetW = (activeActionDef.cols || 4) * (activeActionDef.frameWidth || 300);
-                const sheetH = (activeActionDef.rows || 2) * (activeActionDef.frameHeight || 448);
-                const scaleDiv = 3;
                 return (
                   <button
                     key={f.id}
@@ -530,17 +527,17 @@ export const StudioPlayer: React.FC<StudioPlayerProps> = ({
                       <div
                         style={{
                           backgroundImage: `url(${activeActionDef.sheetUrl})`,
-                          backgroundPosition: `-${f.sx / scaleDiv}px -${f.sy / scaleDiv}px`,
-                          backgroundSize: `${sheetW / scaleDiv}px ${sheetH / scaleDiv}px`,
-                          width: `${(f.sw || 300) / scaleDiv}px`,
-                          height: `${(f.sh || 448) / scaleDiv}px`,
+                          backgroundPosition: `-${f.sx / 3}px -${f.sy / 3}px`,
+                          backgroundSize: `${1200 / 3}px ${896 / 3}px`,
+                          width: `${300 / 3}px`,
+                          height: `${448 / 3}px`,
                         }}
                         className="transform scale-90"
                       />
                     </div>
                     <div className="w-full mt-1.5 text-center">
                       <span className="block text-[11px] font-mono text-slate-300">
-                        {String(i + 1).padStart(2, '0')}
+                        0{i + 1}
                       </span>
                     </div>
                   </button>

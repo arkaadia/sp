@@ -85,7 +85,7 @@ LOG_DIR="/var/log/elysian-sprite-studio"
 SERVICE_NAME="sprite-studio"
 SERVICE_USER="spritestudio"
 DEFAULT_PORT=3000
-DEFAULT_HOST="0.0.0.0"
+DEFAULT_HOST="127.0.0.1"
 
 # ------------------------------------------------------------------------------
 # 1.1. Proxy Environment Sanitization & Diagnostics
@@ -509,10 +509,10 @@ elif [[ ! -f "${INSTALL_DIR}/.env" ]]; then
     else
         cat << 'EOF' > "${INSTALL_DIR}/.env"
 PORT=3000
-HOST=0.0.0.0
+HOST=127.0.0.1
 NODE_ENV=production
 GEMINI_API_KEY=""
-APP_URL="http://0.0.0.0:3000"
+APP_URL="http://127.0.0.1:3000"
 EOF
         log_success "Created default .env configuration."
     fi
@@ -539,7 +539,7 @@ log_info "Checking port configuration..."
 CURRENT_PORT=$(grep -E '^PORT=' "${INSTALL_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "${DEFAULT_PORT}")
 CURRENT_PORT="${CURRENT_PORT:-3000}"
 CURRENT_HOST=$(grep -E '^HOST=' "${INSTALL_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "${DEFAULT_HOST}")
-CURRENT_HOST="${CURRENT_HOST:-0.0.0.0}"
+CURRENT_HOST="${CURRENT_HOST:-127.0.0.1}"
 
 # Check if port is currently in use
 check_port() {
@@ -806,7 +806,7 @@ case "${ACTION}" in
         echo ""
         if [[ -f "${INSTALL_DIR}/.env" ]]; then
             PORT=$(grep -E '^PORT=' "${INSTALL_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "3000")
-            HOST=$(grep -E '^HOST=' "${INSTALL_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "0.0.0.0")
+            HOST=$(grep -E '^HOST=' "${INSTALL_DIR}/.env" | cut -d= -f2 | tr -d '"\r ' || echo "127.0.0.1")
             echo "Access URL: http://${HOST}:${PORT}"
             echo -n "Health Check: "
             curl -s "http://${HOST}:${PORT}/api/health" || echo "Service not responding on HTTP."
@@ -900,8 +900,9 @@ echo "  sprite-studio restart   # Restart production service"
 echo "  sprite-studio stop      # Stop service"
 echo "  sprite-studio update    # Pull updates and rebuild"
 echo ""
-echo -e "${BOLD}LAN / External Network Access:${RESET}"
-echo "  By default, the server binds to 0.0.0.0 to allow access from local and external networks."
-echo "  Access the studio at http://YOUR_SERVER_IP:${RESOLVED_PORT}"
+echo -e "${BOLD}LAN / External Access Note:${RESET}"
+echo "  By default, the server binds to 127.0.0.1 for local security."
+echo "  To allow LAN access, change HOST=0.0.0.0 in ${INSTALL_DIR}/.env and restart:"
+echo "  sudo sed -i 's/^HOST=.*/HOST=0.0.0.0/' ${INSTALL_DIR}/.env && sprite-studio restart"
 echo ""
 EOF

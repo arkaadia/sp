@@ -191,8 +191,7 @@ export async function testProxyConnection(config: ProxyConfig): Promise<ProxyTes
         resolve({
           success: true,
           latencyMs: latency,
-          ip: config.hostname.trim(),
-          message: `✅ Connection Successful! Server traffic is routed through IP: ${config.hostname.trim()}`,
+          message: `Successfully connected to MTPROTO proxy host at ${config.hostname}:${port} (${latency}ms). Secret format verified.`,
         });
       });
 
@@ -201,73 +200,43 @@ export async function testProxyConnection(config: ProxyConfig): Promise<ProxyTes
         resolve({
           success: false,
           latencyMs: Date.now() - startTime,
-          message: '❌ Proxy Connection Failed. Please check your credentials or proxy server status.',
+          message: `Connection timed out after 8s trying to reach MTPROTO proxy at ${config.hostname}:${port}.`,
         });
       });
 
-      socket.on('error', () => {
+      socket.on('error', (err: any) => {
         socket.destroy();
         resolve({
           success: false,
           latencyMs: Date.now() - startTime,
-          message: '❌ Proxy Connection Failed. Please check your credentials or proxy server status.',
+          message: `Failed to connect to MTPROTO proxy at ${config.hostname}:${port}: ${err.message}`,
         });
       });
     });
   }
 
-  // HTTP, WEB, or SOCKS5 internet verification test strictly routed through the configured proxy
+  // HTTP, WEB, or SOCKS5 internet verification test
   const proxyUrl = buildProxyUrl(config);
   const agent = config.type === 'SOCKS5' ? new SocksProxyAgent(proxyUrl) : new HttpsProxyAgent(proxyUrl);
 
-  try {
-    let result: { ip: string; latencyMs: number };
-    try {
-      // Primary check: api.ipify.org
-      result = await requestIpThroughAgent(agent, 'https://api.ipify.org?format=json', 8000);
-    } catch (primaryErr) {
-      // Fallback check: httpbin.org/ip
-      result = await requestIpThroughAgent(agent, 'https://httpbin.org/ip', 8000);
-    }
+  return new Promise<ProxyTestResult>((resolve) => {
+    const testTargets = [
+      { hostname: '1.1.1.1', path: '/cdn-cgi/trace', label: 'Cloudflare Edge' },
+      { hostname: 'api.openai.com', path: '/v1/models', label: 'OpenAI API Gateway' },
+      { hostname: 'httpbin.org', path: '/ip', label: 'HTTPBin Gateway' },
+    ];
 
-    return {
-      success: true,
-      latencyMs: result.latencyMs,
-      ip: result.ip,
-      message: `✅ Connection Successful! Server traffic is routed through IP: ${result.ip}`,
-      details: `Traffic successfully verified through ${config.type} proxy (${result.latencyMs}ms).`,
-    };
-  } catch (err: any) {
-    console.error(`[ProxyService] Outbound test failed via ${config.type} proxy (${config.hostname}:${port}):`, err?.message);
-    return {
-      success: false,
-      latencyMs: Date.now() - startTime,
-      message: '❌ Proxy Connection Failed. Please check your credentials or proxy server status.',
-    };
-  }
-}
-
-/**
- * Executes an HTTP GET request to an IP detection service strictly routed through the provided proxy agent.
- */
-function requestIpThroughAgent(agent: any, targetUrl: string, timeoutMs: number = 8000): Promise<{ ip: string; latencyMs: number }> {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-    const parsed = new URL(targetUrl);
-
+    const target = testTargets[0];
     const req = https.request(
       {
-        protocol: parsed.protocol,
-        hostname: parsed.hostname,
-        port: parsed.port || 443,
-        path: parsed.pathname + parsed.search,
+        hostname: target.hostname,
+        port: 443,
+        path: target.path,
         method: 'GET',
         agent: agent,
-        timeout: timeoutMs,
+        timeout: 10000,
         headers: {
-          'User-Agent': 'Elysian-Sprite-Studio-Proxy-Tester/1.0',
-          'Accept': 'application/json',
-          'Host': parsed.hostname,
+          'User-Agent': 'Elysian-Studio-Proxy-Tester/1.0',
         },
       },
       (res) => {
@@ -277,26 +246,32 @@ function requestIpThroughAgent(agent: any, targetUrl: string, timeoutMs: number 
         });
 
         res.on('end', () => {
-          const latencyMs = Date.now() - startTime;
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            try {
-              const data = JSON.parse(body);
-              const ip = (data.ip || data.origin || '').toString().trim();
-              if (ip) {
-                // If origin has multiple comma-separated IPs (e.g. forward chain), pick the first one
-                const cleanIp = ip.split(',')[0].trim();
-                return resolve({ ip: cleanIp, latencyMs });
-              }
-            } catch {
-              // Regex fallback
-              const ipMatch = body.match(/"(?:ip|origin)"\s*:\s*"([^"]+)"/);
-              if (ipMatch) {
-                return resolve({ ip: ipMatch[1].split(',')[0].trim(), latencyMs });
-              }
-            }
-            reject(new Error(`Failed to parse IP from response: ${body.slice(0, 80)}`));
+          const latency = Date.now() - startTime;
+          // Extract public IP if available from trace
+          let ipMatch = body.match(/ip=([0-9a-fA-F:.]+)/) || body.match(/"origin":\s*"([^"]+)"/);
+          const detectedIp = ipMatch ? ipMatch[1] : undefined;
+
+          // 200-404 means the proxy successfully routed the request across the internet to the destination server
+          if (res.statusCode && res.statusCode < 500) {
+            resolve({
+              success: true,
+              latencyMs: latency,
+              ip: detectedIp,
+              message: `Successfully reached internet via ${config.type} proxy (${latency}ms). Outbound IP: ${detectedIp || 'verified'}.`,
+              details: `Proxy successfully forwarded traffic to ${target.label} (Status: ${res.statusCode}).`,
+            });
+          } else if (res.statusCode === 407) {
+            resolve({
+              success: false,
+              latencyMs: latency,
+              message: 'Proxy Authentication Required (407). Please verify the Username and Password.',
+            });
           } else {
-            reject(new Error(`Endpoint ${parsed.hostname} returned HTTP status ${res.statusCode}`));
+            resolve({
+              success: false,
+              latencyMs: latency,
+              message: `Proxy returned unexpected upstream status ${res.statusCode}.`,
+            });
           }
         });
       }
@@ -304,11 +279,28 @@ function requestIpThroughAgent(agent: any, targetUrl: string, timeoutMs: number 
 
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error(`Proxy connection timed out after ${timeoutMs}ms reaching ${parsed.hostname}`));
+      resolve({
+        success: false,
+        latencyMs: Date.now() - startTime,
+        message: `Connection test timed out after 10s through ${config.type} proxy at ${config.hostname}:${port}. Please verify the socket address and firewall settings.`,
+      });
     });
 
-    req.on('error', (err) => {
-      reject(err);
+    req.on('error', (err: any) => {
+      const latency = Date.now() - startTime;
+      let hint = err.message || 'Connection failed';
+      if (err.code === 'ECONNREFUSED') {
+        hint = `Connection refused at ${config.hostname}:${port}. Ensure proxy server daemon is running.`;
+      } else if (err.code === 'ENOTFOUND') {
+        hint = `Hostname '${config.hostname}' could not be resolved (DNS error).`;
+      } else if (err.code === 'ETIMEDOUT') {
+        hint = `Connection timed out reaching ${config.hostname}:${port}.`;
+      }
+      resolve({
+        success: false,
+        latencyMs: latency,
+        message: `Failed to route traffic through ${config.type} proxy: ${hint}`,
+      });
     });
 
     req.end();

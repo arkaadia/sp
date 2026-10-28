@@ -4,13 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "PORT=3000 tsx server.ts",
+    "dev": "tsx server.ts",
     "validate:sources": "node -e \"const fs=require('fs');const req=['src/App.tsx','src/main.tsx','src/data/spriteData.ts','src/types/sprites.ts','server.ts','package.json','vite.config.ts','index.html'];const miss=req.filter(f=>!fs.existsSync(f));if(miss.length){console.error('Missing required source files:',miss);process.exit(1);}\"",
     "build": "vite build",
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "cap:sync": "vite build && cap sync",
+    "build:desktop": "vite build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -22,8 +24,8 @@
     "jszip": "^3.10.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "multer": "^2.5.0",
-    "openai": "^7.43.0",
+    "multer": "^2.4.0",
+    "openai": "^7.39.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "socks-proxy-agent": "^10.1.0",

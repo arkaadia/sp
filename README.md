@@ -11,22 +11,6 @@ A modern, high-performance web studio designed for indie game developers, pixel 
 
 ---
 
-## 📱 Android Phone & Tablet Edition + `.APK` Download
-
-Elysian Sprite Studio now includes full **Android Smartphone & Tablet touch support**, **PWA / WebAPK offline installation**, and a built-in **Signed Android `.APK` Builder**:
-
-- **Pre-built Universal Android APK**: [`public/downloads/ElysianSpriteStudio-v2.4.0-android-universal.apk`](public/downloads/ElysianSpriteStudio-v2.4.0-android-universal.apk)
-- **Live Server APK Endpoints**:
-  - `GET /api/android/download-apk?profile=universal` — Direct signed `.apk` download (`Universal`, `Tablet`, or `Phone` profile)
-  - `POST /api/android/build-apk` — Custom `.apk` packager (custom App Name, Package ID, Server URL, Orientation, Haptics, and Stylus/S-Pen options)
-- **Android Touch UX**:
-  - Thumb-zone bottom navigation bar + bottom-sheet module drawer for smartphones and compact tablets
-  - Ergonomic Android Touch Gamepad with haptic vibration (`navigator.vibrate`) in the 60 FPS Action Arena
-  - Multi-touch & S-Pen / Stylus pointer support in Painting Canvas and Physics & Hitbox Editor
-  - 1-Click Android Studio + Capacitor Gradle Project (`.ZIP`) export
-
----
-
 ## 🐧 Linux 1-Command Automated Production Installation
 
 On Ubuntu (20.04+) or Debian (11+), deploy the production service with automated runtime provisioning, systemd daemon, and global CLI:
@@ -37,12 +21,10 @@ cd sp
 sudo bash install.sh
 ```
 
-After installation finishes, access the application in your browser at **`http://0.0.0.0:3000`** (or `http://YOUR_SERVER_IP:3000`).
+After installation finishes, access the application in your browser at **`http://127.0.0.1:3000`**.
 
-### Service Management & Helper Scripts
+### Service Management CLI
 ```bash
-bash setup.sh           # Interactive setup: configure HOST and PORT in .env
-bash sync.sh            # Auto-sync: git pull, update deps (bun/npm), reminder
 sprite-studio status    # Check service and health endpoint
 sprite-studio restart   # Restart production service
 sprite-studio logs      # View recent application logs
@@ -58,7 +40,7 @@ sprite-studio stop      # Stop service
 
 ## 🚀 Local Development Quick Start
 - **Node.js** (v18.0.0 or higher recommended, Node 20 LTS preferred)
-- **npm** (v9.0.0+) or **pnpm** / **yarn** / **bun**
+- **npm** (v9.0.0+) or **pnpm** / **yarn**
 
 Verify your environment:
 ```bash
@@ -77,38 +59,24 @@ cd elysian-sprite-studio
 npm install
 ```
 
-### 4. Interactive Setup (HOST & PORT Configuration)
-Run the interactive setup script to configure your network binding:
-```bash
-bash setup.sh
-```
-This prompts for:
-- **HOST IP**: e.g., `0.0.0.0` (binds to all network interfaces) or custom IP.
-- **PORT**: e.g., `3000` or custom port.
-
-The script safely writes your inputs to `.env`. Alternatively, copy `.env.example` manually:
+### 4. Configure Environment Variables
+Copy the example environment configuration:
 ```bash
 cp .env.example .env
 ```
 *(Optional: Provide `GEMINI_API_KEY` in `.env` if using AI animation breakdown extensions).*
 *(Optional: Provide `OPENAI_API_KEY` in `.env` if using the AI Character Generator).*
 
-### 5. Keeping Up to Date (Auto-Sync)
-To pull recent commits and install updated dependencies:
-```bash
-bash sync.sh
-```
-
-### 6. Launch the Development Server
+### 5. Launch the Development Server
 ```bash
 npm run dev
 ```
 Open your browser and navigate to:
 ```
-http://localhost:3000   # (or http://HOST:PORT as configured in .env)
+http://localhost:3000
 ```
 
-### 7. Production Build & Deployment
+### 6. Production Build & Deployment
 To create an optimized production build:
 ```bash
 npm run build
@@ -140,8 +108,6 @@ elysian-sprite-studio/
 ├── package.json              # Project dependencies & scripts
 ├── tsconfig.json             # TypeScript compiler settings
 ├── vite.config.ts            # Vite & Tailwind CSS bundler configuration
-├── setup.sh                  # Interactive network binding (HOST & PORT) setup
-├── sync.sh                   # Auto-sync git commits & update dependencies
 ├── server.ts                 # Full-stack Express server with Vite middleware
 ├── SPRITE_RULES.md           # Game animation conventions & standard rules
 ├── ARCHITECTURE.md           # System design & component interaction docs
